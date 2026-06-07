@@ -57,6 +57,7 @@ services:
     name: taverntable-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []   # allow all — backend connects via internal Render network
 
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
 databases:
