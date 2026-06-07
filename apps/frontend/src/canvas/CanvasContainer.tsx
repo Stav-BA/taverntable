@@ -93,6 +93,14 @@ export default function CanvasContainer() {
     if (!ready || !currentMap || !mapRendererRef.current || !gridRef.current) return;
     mapRendererRef.current.loadMap(currentMap);
     gridRef.current.drawGrid(currentMap);
+
+    // PixiJS may not have its final size on the very first render tick.
+    // Redraw the procedural map after a short delay to guarantee correct dimensions.
+    const t = setTimeout(() => {
+      mapRendererRef.current?.redrawIfProcedural(currentMap);
+      gridRef.current?.drawGrid(currentMap);
+    }, 300);
+    return () => clearTimeout(t);
   }, [ready, currentMap]);
 
   // Token sync

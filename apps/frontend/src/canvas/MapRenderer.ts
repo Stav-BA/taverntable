@@ -43,11 +43,23 @@ export class MapRenderer {
     this.loadedMapId = config.id;
   }
 
+  /** Call this after a resize event to redraw the procedural map at the new size */
+  redrawIfProcedural(config: MapConfig): void {
+    if (!this.mapGraphics || this.loadedMapId !== config.id) return;
+    this.container.removeChildren();
+    this.mapGraphics = null;
+    const gfx = this.buildProceduralMap(config);
+    this.container.addChild(gfx);
+    this.mapGraphics = gfx;
+  }
+
   // ── Procedural map builder ─────────────────────────────────────────────────
 
   private buildProceduralMap(config: MapConfig): Graphics {
-    const stageW = this.app.screen.width;
-    const stageH = this.app.screen.height;
+    // Use screen size if available; fall back to a safe minimum so PixiJS
+    // doesn't draw at 0×0 if the canvas hasn't been sized yet on first render.
+    const stageW = Math.max(this.app.screen.width, 1200);
+    const stageH = Math.max(this.app.screen.height, 700);
     const gfx = new Graphics();
 
     if (config.id.includes('tavern') || config.id.includes('inn')) {

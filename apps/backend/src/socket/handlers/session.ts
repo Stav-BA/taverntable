@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { prisma } from '../../db/client';
-import { initGameState, getGameState, deleteGameState } from '../../redis/sessionState';
+import { initGameState, getGameState, deleteGameState, getOrInitGameState } from '../../redis/sessionState';
 
 // Ambiguous chars excluded: 0, O, 1, I, L
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -110,7 +110,10 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
       // Use client-provided playerId if given, else create one
       const playerId = payload.playerId || socket.id;
 
-      const gameState = await getGameState(session.id);
+      // DM joining = fresh session: wipe old Redis state so stale fog/tokens don't bleed in
+      const gameState = payload.isDM
+        ? await initGameState(session.id)
+        : await getOrInitGameState(session.id);
 
       await socket.join(session.id);
       socketMeta._sessionId = session.id;
