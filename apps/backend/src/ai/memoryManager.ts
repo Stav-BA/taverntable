@@ -9,7 +9,7 @@
  * - History older than 50 events is summarised by Claude into a compact "Previously..." block
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { redis } from '../redis/client';
 import { prisma } from '../db/client';
 import type {
@@ -117,12 +117,10 @@ function defaultCampaignContext(sessionId: string): CampaignContext {
 // ---------------------------------------------------------------------------
 
 export class MemoryManager {
-  private anthropic: Anthropic;
+  private genAI: GoogleGenerativeAI;
 
   constructor() {
-    this.anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY ?? '');
   }
 
   // -------------------------------------------------------------------------
@@ -366,21 +364,15 @@ export class MemoryManager {
   async summariseHistory(messages: AIMessage[]): Promise<string> {
     const events = messages.map((m) => `- ${m.content}`).join('\n');
 
-    const response = await this.anthropic.messages.create({
-      model: process.env.AI_DM_COMBAT_MODEL ?? 'claude-haiku-4-5',
-      max_tokens: 200,
-      system:
+    const model = this.genAI.getGenerativeModel({
+      model: process.env.AI_DM_COMBAT_MODEL ?? 'gemini-1.5-flash',
+      systemInstruction:
         'You are a concise campaign scribe. Summarise D&D session events into a single "Previously..." paragraph of 100 words or fewer. Use past tense. Include the most important plot beats, NPC interactions, and character moments. Omit minor details.',
-      messages: [
-        {
-          role: 'user',
-          content: `Summarise these campaign events:\n\n${events}`,
-        },
-      ],
+      generationConfig: { maxOutputTokens: 200 },
     });
 
-    const block = response.content[0];
-    return block.type === 'text' ? block.text : 'Previously, the party adventured onward...';
+    const result = await model.generateContent(`Summarise these campaign events:\n\n${events}`);
+    return result.response.text() || 'Previously, the party adventured onward...';
   }
 
   // -------------------------------------------------------------------------

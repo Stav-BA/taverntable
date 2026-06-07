@@ -21,8 +21,8 @@ services:
           name: taverntable-redis
           type: redis
           property: connectionString
-      - key: ANTHROPIC_API_KEY
-        sync: false   # Set manually in Render dashboard
+      - key: GOOGLE_API_KEY
+        sync: false   # Set manually in Render dashboard — get free key at aistudio.google.com
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET

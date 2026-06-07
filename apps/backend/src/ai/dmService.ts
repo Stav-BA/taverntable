@@ -1,14 +1,14 @@
 /**
  * dmService.ts
- * Main AI Dungeon Master service — wraps Anthropic Claude API calls
+ * Main AI Dungeon Master service — wraps Google Gemini API calls
  * with campaign memory, prompt construction, and streaming support.
  *
  * Model strategy:
- * - claude-opus-4-5  → full narration, NPC dialogue, scene descriptions (rich, creative)
- * - claude-haiku-4-5 → combat narration, hook generation (fast, low-latency)
+ * - gemini-1.5-pro   → full narration, NPC dialogue, scene descriptions (rich, creative)
+ * - gemini-1.5-flash → combat narration, hook generation (fast, low-latency)
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI, type Content } from '@google/generative-ai';
 import { MemoryManager } from './memoryManager';
 import {
   buildSystemPrompt,
@@ -22,8 +22,8 @@ import { randomUUID } from 'crypto';
 // Constants
 // ---------------------------------------------------------------------------
 
-const MODEL_NARRATION = process.env.AI_DM_MODEL ?? 'claude-opus-4-5';
-const MODEL_COMBAT = process.env.AI_DM_COMBAT_MODEL ?? 'claude-haiku-4-5';
+const MODEL_NARRATION = process.env.AI_DM_MODEL ?? 'gemini-1.5-pro';
+const MODEL_COMBAT = process.env.AI_DM_COMBAT_MODEL ?? 'gemini-1.5-flash';
 const MAX_TOKENS_NARRATION = Number(process.env.AI_DM_MAX_TOKENS ?? 300);
 const MAX_TOKENS_COMBAT = 100;
 const MAX_TOKENS_NPC = 200;
@@ -35,15 +35,29 @@ const FALLBACK_NARRATION =
   'The air crackles with possibility. The world holds its breath, waiting to see what you do next. What is your move?';
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Convert our internal message history to Gemini's Content[] format */
+function toGeminiHistory(
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+): Content[] {
+  return messages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // DMService
 // ---------------------------------------------------------------------------
 
 export class DMService {
-  private client: Anthropic;
+  private genAI: GoogleGenerativeAI;
   private memoryManager: MemoryManager;
 
   constructor() {
-    this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY ?? '');
     this.memoryManager = new MemoryManager();
   }
 
@@ -51,16 +65,6 @@ export class DMService {
   // narrate
   // -------------------------------------------------------------------------
 
-  /**
-   * Main narration: a player declares an action and the DM responds.
-   * Uses the full campaign context and sliding-window message history.
-   * Saves both the player action and DM response to memory.
-   *
-   * @param sessionId    - The game session UUID
-   * @param playerAction - The player's declared action (free text)
-   * @param playerId     - The player's ID (for attribution in memory)
-   * @returns The AI DM's narration response
-   */
   async narrate(
     sessionId: string,
     playerAction: string,
@@ -69,40 +73,22 @@ export class DMService {
     const memory = await this.memoryManager.load(sessionId);
     const systemPrompt = buildSystemPrompt(memory.context);
     const userPrompt = buildNarrationPrompt(playerAction, memory.context);
-
     const history = await this.memoryManager.getMessageHistory(sessionId);
 
     try {
-      const response = await this.client.messages.create({
+      const model = this.genAI.getGenerativeModel({
         model: MODEL_NARRATION,
-        max_tokens: MAX_TOKENS_NARRATION,
-        temperature: 0.8,
-        system: systemPrompt,
-        messages: [
-          ...history,
-          { role: 'user', content: userPrompt },
-        ],
+        systemInstruction: systemPrompt,
+        generationConfig: { maxOutputTokens: MAX_TOKENS_NARRATION, temperature: 0.8 },
       });
 
-      const text =
-        response.content[0]?.type === 'text'
-          ? response.content[0].text
-          : FALLBACK_NARRATION;
+      const chat = model.startChat({ history: toGeminiHistory(history) });
+      const result = await chat.sendMessage(userPrompt);
+      const text = result.response.text() || FALLBACK_NARRATION;
 
-      // Persist to memory
       const ts = Date.now();
-      await this.memoryManager.addMessage(sessionId, {
-        role: 'user',
-        content: userPrompt,
-        timestamp: ts,
-      });
-      await this.memoryManager.addMessage(sessionId, {
-        role: 'assistant',
-        content: text,
-        timestamp: ts + 1,
-      });
-
-      // Record as a world event
+      await this.memoryManager.addMessage(sessionId, { role: 'user', content: userPrompt, timestamp: ts });
+      await this.memoryManager.addMessage(sessionId, { role: 'assistant', content: text, timestamp: ts + 1 });
       await this.memoryManager.addEvent(sessionId, {
         id: randomUUID(),
         timestamp: ts,
@@ -122,43 +108,27 @@ export class DMService {
   // narrateCombat
   // -------------------------------------------------------------------------
 
-  /**
-   * Quick combat narration — 1-2 sentences, fast model, low latency.
-   * Does NOT append to the full conversation history (keeps it clean).
-   *
-   * @param sessionId   - The game session UUID
-   * @param combatEvent - Structured description of the combat action
-   * @returns Short, punchy combat narration
-   */
   async narrateCombat(sessionId: string, event: CombatEvent): Promise<string> {
     const memory = await this.memoryManager.load(sessionId);
     const systemPrompt = buildSystemPrompt(memory.context);
     const userPrompt = buildCombatNarrationPrompt(event, memory.context);
 
     try {
-      const response = await this.client.messages.create({
+      const model = this.genAI.getGenerativeModel({
         model: MODEL_COMBAT,
-        max_tokens: MAX_TOKENS_COMBAT,
-        temperature: 0.7,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
+        systemInstruction: systemPrompt,
+        generationConfig: { maxOutputTokens: MAX_TOKENS_COMBAT, temperature: 0.7 },
       });
 
-      const text =
-        response.content[0]?.type === 'text'
-          ? response.content[0].text
-          : `${event.actorName} acts decisively. ${event.outcome}.`;
+      const result = await model.generateContent(userPrompt);
+      const text = result.response.text() || `${event.actorName} acts decisively. ${event.outcome}.`;
 
-      // Log as a combat event
       await this.memoryManager.addEvent(sessionId, {
         id: randomUUID(),
         timestamp: Date.now(),
         type: 'combat',
         description: `${event.actorName} → ${event.actionType}: ${event.outcome}`,
-        involvedCharacters: [
-          event.actorName,
-          ...(event.targetName ? [event.targetName] : []),
-        ],
+        involvedCharacters: [event.actorName, ...(event.targetName ? [event.targetName] : [])],
       });
 
       return text;
@@ -172,14 +142,6 @@ export class DMService {
   // npcSpeak
   // -------------------------------------------------------------------------
 
-  /**
-   * Generate NPC dialogue — in-character, consistent with their disposition.
-   *
-   * @param sessionId      - The game session UUID
-   * @param npcName        - Name of the NPC speaking
-   * @param playerQuestion - What the player said/asked
-   * @returns The NPC's in-character response
-   */
   async npcSpeak(
     sessionId: string,
     npcName: string,
@@ -197,22 +159,15 @@ export class DMService {
     const systemPrompt = buildSystemPrompt(memory.context);
 
     try {
-      const response = await this.client.messages.create({
+      const model = this.genAI.getGenerativeModel({
         model: MODEL_NARRATION,
-        max_tokens: MAX_TOKENS_NPC,
-        temperature: 0.85,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: `The players approach ${npcName} and say: "${playerQuestion}"\n\n${npcContext}\n\nRespond as ${npcName} would, in character. Include a brief narrative beat before/after the dialogue if appropriate.`,
-          },
-        ],
+        systemInstruction: systemPrompt,
+        generationConfig: { maxOutputTokens: MAX_TOKENS_NPC, temperature: 0.85 },
       });
 
-      return response.content[0]?.type === 'text'
-        ? response.content[0].text
-        : `${npcName} looks at you warily but says nothing.`;
+      const prompt = `The players approach ${npcName} and say: "${playerQuestion}"\n\n${npcContext}\n\nRespond as ${npcName} would, in character. Include a brief narrative beat before/after the dialogue if appropriate.`;
+      const result = await model.generateContent(prompt);
+      return result.response.text() || `${npcName} looks at you warily but says nothing.`;
     } catch (err) {
       console.error('[DMService.npcSpeak] Error:', (err as Error).message);
       return `${npcName} regards you carefully but remains silent for now.`;
@@ -223,15 +178,6 @@ export class DMService {
   // describeScene
   // -------------------------------------------------------------------------
 
-  /**
-   * Generate a rich scene description when the party enters a new area.
-   * Engages multiple senses; stays under 150 words.
-   *
-   * @param sessionId - The game session UUID
-   * @param location  - Name/type of the location being entered
-   * @param timeOfDay - Current time of day for lighting/atmosphere
-   * @returns Vivid scene description
-   */
   async describeScene(
     sessionId: string,
     location: string,
@@ -239,7 +185,6 @@ export class DMService {
   ): Promise<string> {
     const memory = await this.memoryManager.load(sessionId);
 
-    // Update world state with new location
     await this.memoryManager.updateWorldState(sessionId, {
       currentLocation: location,
       timeOfDay: timeOfDay as any,
@@ -248,25 +193,16 @@ export class DMService {
     const systemPrompt = buildSystemPrompt(memory.context);
 
     try {
-      const response = await this.client.messages.create({
+      const model = this.genAI.getGenerativeModel({
         model: MODEL_NARRATION,
-        max_tokens: MAX_TOKENS_SCENE,
-        temperature: 0.8,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: `The party arrives at: ${location}\nTime of day: ${timeOfDay}\nSetting: ${memory.context.setting}\n\nDescribe this location in 100–150 words. Engage at least 3 senses. End with something that invites exploration or raises a question.`,
-          },
-        ],
+        systemInstruction: systemPrompt,
+        generationConfig: { maxOutputTokens: MAX_TOKENS_SCENE, temperature: 0.8 },
       });
 
-      const text =
-        response.content[0]?.type === 'text'
-          ? response.content[0].text
-          : `You arrive at ${location}. The area feels charged with potential.`;
+      const prompt = `The party arrives at: ${location}\nTime of day: ${timeOfDay}\nSetting: ${memory.context.setting}\n\nDescribe this location in 100–150 words. Engage at least 3 senses. End with something that invites exploration or raises a question.`;
+      const result = await model.generateContent(prompt);
+      const text = result.response.text() || `You arrive at ${location}. The area feels charged with potential.`;
 
-      // Record the discovery
       if (!memory.worldState.discoveredLocations.includes(location)) {
         await this.memoryManager.updateWorldState(sessionId, {
           discoveredLocations: [...memory.worldState.discoveredLocations, location],
@@ -291,15 +227,6 @@ export class DMService {
   // generateHook
   // -------------------------------------------------------------------------
 
-  /**
-   * Generate an adventure hook appropriate for the party level and campaign tone.
-   * Can be used by the DM to seed the next session.
-   *
-   * @param sessionId  - The game session UUID
-   * @param partyLevel - Average party level (1-20)
-   * @param tone       - Campaign tone override (defaults to context tone)
-   * @returns A narrative adventure hook with DM notes
-   */
   async generateHook(
     sessionId: string,
     partyLevel: number,
@@ -313,22 +240,15 @@ export class DMService {
       .join('\n');
 
     try {
-      const response = await this.client.messages.create({
+      const model = this.genAI.getGenerativeModel({
         model: MODEL_COMBAT,
-        max_tokens: MAX_TOKENS_HOOK,
-        temperature: 0.9,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: `Generate an adventure hook for a party of level ${partyLevel} in a ${tone} campaign.\n\nPlayer backstories to potentially tie in:\n${backstories}\n\nProvide:\n1. The hook (2-3 sentences, present-tense, immediate)\n2. What's really going on (DM secret, 1-2 sentences)\n3. Suggested difficulty: Easy / Medium / Hard / Deadly`,
-          },
-        ],
+        systemInstruction: systemPrompt,
+        generationConfig: { maxOutputTokens: MAX_TOKENS_HOOK, temperature: 0.9 },
       });
 
-      return response.content[0]?.type === 'text'
-        ? response.content[0].text
-        : 'A mysterious stranger approaches the party with an urgent message...';
+      const prompt = `Generate an adventure hook for a party of level ${partyLevel} in a ${tone} campaign.\n\nPlayer backstories to potentially tie in:\n${backstories}\n\nProvide:\n1. The hook (2-3 sentences, present-tense, immediate)\n2. What's really going on (DM secret, 1-2 sentences)\n3. Suggested difficulty: Easy / Medium / Hard / Deadly`;
+      const result = await model.generateContent(prompt);
+      return result.response.text() || 'A mysterious stranger approaches the party with an urgent message...';
     } catch (err) {
       console.error('[DMService.generateHook] Error:', (err as Error).message);
       return 'A messenger arrives bearing a sealed letter with an unfamiliar crest.';
@@ -339,15 +259,6 @@ export class DMService {
   // narrateStream
   // -------------------------------------------------------------------------
 
-  /**
-   * Stream narration in real-time via a callback.
-   * Uses the Anthropic streaming API for a typewriter effect on the client.
-   * Automatically saves the complete response to memory when done.
-   *
-   * @param sessionId    - The game session UUID
-   * @param playerAction - The player's declared action
-   * @param onChunk      - Callback fired for each text chunk received
-   */
   async narrateStream(
     sessionId: string,
     playerAction: string,
@@ -361,39 +272,26 @@ export class DMService {
     let fullText = '';
 
     try {
-      const stream = await this.client.messages.stream({
+      const model = this.genAI.getGenerativeModel({
         model: MODEL_NARRATION,
-        max_tokens: MAX_TOKENS_NARRATION,
-        temperature: 0.8,
-        system: systemPrompt,
-        messages: [
-          ...history,
-          { role: 'user', content: userPrompt },
-        ],
+        systemInstruction: systemPrompt,
+        generationConfig: { maxOutputTokens: MAX_TOKENS_NARRATION, temperature: 0.8 },
       });
 
-      for await (const chunk of stream) {
-        if (
-          chunk.type === 'content_block_delta' &&
-          chunk.delta.type === 'text_delta'
-        ) {
-          onChunk(chunk.delta.text);
-          fullText += chunk.delta.text;
+      const chat = model.startChat({ history: toGeminiHistory(history) });
+      const streamResult = await chat.sendMessageStream(userPrompt);
+
+      for await (const chunk of streamResult.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) {
+          onChunk(chunkText);
+          fullText += chunkText;
         }
       }
 
-      // Persist full response to memory
       const ts = Date.now();
-      await this.memoryManager.addMessage(sessionId, {
-        role: 'user',
-        content: userPrompt,
-        timestamp: ts,
-      });
-      await this.memoryManager.addMessage(sessionId, {
-        role: 'assistant',
-        content: fullText,
-        timestamp: ts + 1,
-      });
+      await this.memoryManager.addMessage(sessionId, { role: 'user', content: userPrompt, timestamp: ts });
+      await this.memoryManager.addMessage(sessionId, { role: 'assistant', content: fullText, timestamp: ts + 1 });
     } catch (err) {
       console.error('[DMService.narrateStream] Error:', (err as Error).message);
       onChunk(FALLBACK_NARRATION);

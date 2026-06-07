@@ -4,25 +4,34 @@
  * These are used for pre-session prep, on-the-fly table needs,
  * and DM tooling (NPC generator, location designer, trap builder).
  *
- * All generators use claude-haiku-4-5 for speed and cost efficiency.
+ * All generators use gemini-1.5-flash for speed and cost efficiency.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ---------------------------------------------------------------------------
 // Singleton client
 // ---------------------------------------------------------------------------
 
-let _client: Anthropic | null = null;
+let _genAI: GoogleGenerativeAI | null = null;
 
-function getClient(): Anthropic {
-  if (!_client) {
-    _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+function getGenAI(): GoogleGenerativeAI {
+  if (!_genAI) {
+    _genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY ?? '');
   }
-  return _client;
+  return _genAI;
 }
 
-const MODEL = process.env.AI_DM_COMBAT_MODEL ?? 'claude-haiku-4-5';
+const MODEL = process.env.AI_DM_COMBAT_MODEL ?? 'gemini-1.5-flash';
+
+async function callGemini(prompt: string, maxTokens: number, temperature = 0.9): Promise<string> {
+  const model = getGenAI().getGenerativeModel({
+    model: MODEL,
+    generationConfig: { maxOutputTokens: maxTokens, temperature },
+  });
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
 
 // ---------------------------------------------------------------------------
 // Result interfaces
@@ -32,13 +41,9 @@ export interface GeneratedNPC {
   name: string;
   race: string;
   role: string;
-  /** One-sentence visual description */
   appearance: string;
-  /** Core personality traits */
   personality: string;
-  /** Hidden motive or secret */
   secret: string;
-  /** Default speech patterns or catchphrase */
   speechPattern: string;
   disposition: 'hostile' | 'unfriendly' | 'neutral' | 'friendly' | 'ally';
 }
@@ -46,40 +51,27 @@ export interface GeneratedNPC {
 export interface GeneratedLocation {
   name: string;
   type: string;
-  /** Atmospheric scene description (150 words max) */
   description: string;
-  /** 3 notable features or points of interest */
   pointsOfInterest: string[];
-  /** Possible encounters or hooks here */
   hooks: string[];
-  /** Ambient sounds and smells */
   ambience: string;
 }
 
 export interface AdventureHook {
   title: string;
-  /** Public-facing hook (what the players hear) */
   hook: string;
-  /** DM-only: what's really going on */
   truth: string;
-  /** Suggested encounters (Easy / Medium / Hard / Deadly) */
   difficulty: 'Easy' | 'Medium' | 'Hard' | 'Deadly';
-  /** Which backstories this ties into */
   backstoryConnections: string[];
 }
 
 export interface GeneratedTrap {
   name: string;
   type: string;
-  /** Read-aloud description (what players might notice) */
   readAloud: string;
-  /** Perception/Investigation DC to notice */
   detectionDC: number;
-  /** Ability check and DC to disarm */
   disarmCheck: string;
-  /** Damage, conditions, or other effects on trigger */
   effect: string;
-  /** Challenge Rating equivalent */
   cr: number;
 }
 
@@ -87,23 +79,12 @@ export interface GeneratedTrap {
 // generateNPC
 // ---------------------------------------------------------------------------
 
-/**
- * Generate a random NPC with name, appearance, personality, and a secret.
- * Results are suitable for immediate use at the table.
- *
- * @param options.race        - Species/race hint (e.g. "dwarf", "tiefling")
- * @param options.role        - Social role (e.g. "innkeeper", "merchant", "guard")
- * @param options.disposition - Default attitude toward the party
- * @param options.setting     - Campaign setting for flavour (e.g. "dark gothic")
- * @returns A fully generated NPC object
- */
 export async function generateNPC(options: {
   race?: string;
   role?: string;
   disposition?: string;
   setting?: string;
 }): Promise<GeneratedNPC> {
-  const client = getClient();
   const { race = 'any', role = 'commoner', disposition = 'neutral', setting = 'high fantasy' } = options;
 
   const prompt = `Generate a D&D NPC for a ${setting} setting.
@@ -124,24 +105,17 @@ Respond ONLY with valid JSON matching this schema (no markdown, no extra text):
 }`;
 
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 300,
-      temperature: 0.9,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
-    return JSON.parse(text) as GeneratedNPC;
+    const text = await callGemini(prompt, 300, 0.9);
+    const json = text.replace(/```json\n?|\n?```/g, '').trim();
+    return JSON.parse(json) as GeneratedNPC;
   } catch {
-    // Fallback NPC
     return {
       name: 'Mira Ashvale',
       race: race === 'any' ? 'Human' : race,
       role,
       appearance: 'A weathered figure with sharp eyes that miss nothing.',
       personality: 'Cautious, pragmatic, and unexpectedly kind when trust is earned.',
-      secret: 'She owes a dangerous debt to a thieves\' guild.',
+      secret: "She owes a dangerous debt to a thieves' guild.",
       speechPattern: 'Speaks in short sentences. Pauses before answering questions.',
       disposition: disposition as GeneratedNPC['disposition'],
     };
@@ -152,20 +126,11 @@ Respond ONLY with valid JSON matching this schema (no markdown, no extra text):
 // generateLocation
 // ---------------------------------------------------------------------------
 
-/**
- * Generate a detailed location description with points of interest and hooks.
- *
- * @param options.type       - Location archetype
- * @param options.tone       - Campaign tone for atmospheric flavour
- * @param options.partyLevel - Used to calibrate encounter difficulty hints
- * @returns A fully generated location object
- */
 export async function generateLocation(options: {
   type: 'tavern' | 'dungeon' | 'city' | 'wilderness' | 'castle' | 'temple';
   tone: string;
   partyLevel: number;
 }): Promise<GeneratedLocation> {
-  const client = getClient();
   const { type, tone, partyLevel } = options;
 
   const prompt = `Generate a D&D location for a ${tone} campaign. Party level: ${partyLevel}.
@@ -182,15 +147,9 @@ Respond ONLY with valid JSON (no markdown, no extra text):
 }`;
 
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 400,
-      temperature: 0.85,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
-    return JSON.parse(text) as GeneratedLocation;
+    const text = await callGemini(prompt, 400, 0.85);
+    const json = text.replace(/```json\n?|\n?```/g, '').trim();
+    return JSON.parse(json) as GeneratedLocation;
   } catch {
     return {
       name: `The ${type.charAt(0).toUpperCase() + type.slice(1)}`,
@@ -207,20 +166,11 @@ Respond ONLY with valid JSON (no markdown, no extra text):
 // generateHook
 // ---------------------------------------------------------------------------
 
-/**
- * Generate a complete adventure hook tied to player backstories.
- *
- * @param options.partyLevel       - Average party level
- * @param options.tone             - Campaign tone
- * @param options.playerBackstories - Array of player backstory summaries
- * @returns A fully generated adventure hook
- */
 export async function generateHook(options: {
   partyLevel: number;
   tone: string;
   playerBackstories: string[];
 }): Promise<AdventureHook> {
-  const client = getClient();
   const { partyLevel, tone, playerBackstories } = options;
 
   const backstoryBlock = playerBackstories.length
@@ -242,15 +192,9 @@ Respond ONLY with valid JSON (no markdown, no extra text):
 }`;
 
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 350,
-      temperature: 0.9,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
-    return JSON.parse(text) as AdventureHook;
+    const text = await callGemini(prompt, 350, 0.9);
+    const json = text.replace(/```json\n?|\n?```/g, '').trim();
+    return JSON.parse(json) as AdventureHook;
   } catch {
     return {
       title: 'A Cry in the Night',
@@ -266,20 +210,11 @@ Respond ONLY with valid JSON (no markdown, no extra text):
 // generateTrap
 // ---------------------------------------------------------------------------
 
-/**
- * Generate a trap with mechanics and read-aloud text.
- *
- * @param options.cr          - Challenge rating equivalent (influences lethality)
- * @param options.type        - Trap mechanism type (e.g. "poison dart", "pit", "magical")
- * @param options.environment - Where the trap is located (affects flavour)
- * @returns A fully generated trap with game mechanics
- */
 export async function generateTrap(options: {
   cr: number;
   type: string;
   environment: string;
 }): Promise<GeneratedTrap> {
-  const client = getClient();
   const { cr, type, environment } = options;
 
   const prompt = `Generate a D&D 5e trap.
@@ -299,15 +234,9 @@ Respond ONLY with valid JSON (no markdown, no extra text):
 }`;
 
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 250,
-      temperature: 0.7,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
-    return JSON.parse(text) as GeneratedTrap;
+    const text = await callGemini(prompt, 250, 0.7);
+    const json = text.replace(/```json\n?|\n?```/g, '').trim();
+    return JSON.parse(json) as GeneratedTrap;
   } catch {
     return {
       name: 'Pressure Plate Dart Trap',
