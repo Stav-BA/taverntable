@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useGameStore } from '@/stores/gameStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { socketEmit } from '@/lib/socket';
+import { DMToolsPanel } from '@/components/DMTools';
 
 const MACRO_PRESETS = [
   { label: 'Perception', icon: '👁', expression: '1d20', modifier: 0 },
@@ -65,7 +66,7 @@ export default function RightSidebar() {
   const isDM = useSessionStore((s) => s.isDM);
   const selectedTokenId = useSessionStore((s) => s.selectedTokenId);
   const connectedPlayers = useSessionStore((s) => s.connectedPlayers);
-  const [activeTab, setActiveTab] = useState<'character' | 'players'>('character');
+  const [activeTab, setActiveTab] = useState<'character' | 'players' | 'dm-tools'>('character');
 
   const myToken = tokens.find((t) => t.playerId === player?.id) ?? null;
   const selectedToken = selectedTokenId ? tokens.find((t) => t.id === selectedTokenId) : null;
@@ -84,25 +85,33 @@ export default function RightSidebar() {
     >
       {/* Tabs */}
       <div className="flex" style={{ borderBottom: '1px solid rgba(201,162,39,0.3)' }}>
-        {(['character', 'players'] as const).map((tab) => (
+        {([
+          { id: 'character', label: '🧙 Character' },
+          { id: 'players',   label: '👥 Players' },
+          ...(isDM ? [{ id: 'dm-tools', label: '🎲 DM Tools' }] : []),
+        ] as const).map((tab) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className="flex-1 font-cinzel text-xs uppercase tracking-wider py-2 transition-all"
             style={{
-              background: activeTab === tab ? 'rgba(201,162,39,0.15)' : 'transparent',
-              borderBottom: activeTab === tab ? '2px solid #c9a227' : '2px solid transparent',
-              color: activeTab === tab ? '#c9a227' : 'rgba(244,228,188,0.5)',
+              background: activeTab === tab.id ? 'rgba(201,162,39,0.15)' : 'transparent',
+              borderBottom: activeTab === tab.id ? '2px solid #c9a227' : '2px solid transparent',
+              color: activeTab === tab.id ? '#c9a227' : 'rgba(244,228,188,0.5)',
               border: 'none',
               cursor: 'pointer',
             }}
           >
-            {tab === 'character' ? '🧙 Character' : '👥 Players'}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {activeTab === 'character' ? (
+      {activeTab === 'dm-tools' ? (
+        <div className="flex-1 overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
+          <DMToolsPanel />
+        </div>
+      ) : activeTab === 'character' ? (
         <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-4">
           {/* Character Panel */}
           {displayToken ? (

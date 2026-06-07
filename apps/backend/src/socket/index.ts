@@ -4,6 +4,7 @@ import { registerSessionHandlers } from './handlers/session';
 import { registerGameHandlers } from './handlers/game';
 import { registerDiceHandlers } from './handlers/dice';
 import { registerChatHandlers } from './handlers/chat';
+import { registerAIDMHandlers } from './handlers/aiDm';
 
 export function createSocketServer(httpServer: HttpServer): Server {
   const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
@@ -25,6 +26,7 @@ export function createSocketServer(httpServer: HttpServer): Server {
     registerGameHandlers(io, socket);
     registerDiceHandlers(io, socket);
     registerChatHandlers(io, socket);
+    registerAIDMHandlers(io, socket);
 
     socket.on('error', (err) => {
       console.error(`[Socket] Error on ${socket.id}:`, err);
