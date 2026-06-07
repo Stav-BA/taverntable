@@ -39,7 +39,6 @@ services:
   - type: web
     name: taverntable-frontend
     runtime: static
-    plan: free
     buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && pnpm --filter @taverntable/dnd-rules build && pnpm --filter @taverntable/frontend build
     staticPublishPath: ./apps/frontend/dist
     pullRequestPreviewsEnabled: true
