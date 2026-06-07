@@ -75,7 +75,7 @@ import {
   getSpellSlots,
   getMaxHP,
   getInitiativeBonus,
-} from '@dnd-vtt/dnd-rules';
+} from '@taverntable/dnd-rules';
 
 // Example: skill bonus
 const skillBonus = getSkillBonus({

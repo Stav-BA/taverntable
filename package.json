@@ -1,5 +1,5 @@
 {
-  "name": "dnd-vtt",
+  "name": "taverntable",
   "private": true,
   "scripts": {
     "dev": "pnpm -r --parallel dev",

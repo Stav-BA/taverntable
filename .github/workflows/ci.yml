@@ -36,7 +36,7 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @dnd-vtt/dnd-rules test --coverage
+      - run: pnpm --filter @taverntable/dnd-rules test --coverage
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
@@ -74,10 +74,10 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - name: Run migrations
-        run: pnpm --filter @dnd-vtt/backend prisma migrate deploy
+        run: pnpm --filter @taverntable/backend prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:testpass@localhost:5432/dndvtt_test
-      - run: pnpm --filter @dnd-vtt/backend test
+      - run: pnpm --filter @taverntable/backend test
         env:
           DATABASE_URL: postgresql://postgres:testpass@localhost:5432/dndvtt_test
           REDIS_URL: redis://localhost:6379
@@ -96,7 +96,7 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @dnd-vtt/content validate
+      - run: pnpm --filter @taverntable/content validate
 
   e2e-tests:
     name: E2E — Playwright
@@ -124,16 +124,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - name: Start backend
-        run: pnpm --filter @dnd-vtt/backend start &
+        run: pnpm --filter @taverntable/backend start &
         env:
           DATABASE_URL: postgresql://postgres:testpass@localhost:5432/dndvtt_test
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
           PORT: 3001
       - name: Start frontend
-        run: pnpm --filter @dnd-vtt/frontend build && pnpm --filter @dnd-vtt/frontend preview &
+        run: pnpm --filter @taverntable/frontend build && pnpm --filter @taverntable/frontend preview &
       - run: sleep 5
-      - run: pnpm --filter @dnd-vtt/frontend test:e2e
+      - run: pnpm --filter @taverntable/frontend test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
