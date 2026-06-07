@@ -4,7 +4,7 @@ services:
     name: taverntable-backend
     runtime: node
     plan: free
-    buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && node_modules/.bin/prisma generate --schema=apps/backend/src/db/schema.prisma
+    buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && PRISMA_GENERATE_SKIP_AUTOINSTALL=1 node_modules/.bin/prisma generate --schema=apps/backend/src/db/schema.prisma
     startCommand: node_modules/.bin/tsx apps/backend/src/index.ts
     healthCheckPath: /health
     envVars:
