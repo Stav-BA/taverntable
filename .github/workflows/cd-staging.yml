@@ -1,0 +1,39 @@
+name: Deploy — Staging
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build frontend
+        run: pnpm --filter @dnd-vtt/frontend build
+        env:
+          VITE_BACKEND_URL: ${{ secrets.STAGING_BACKEND_URL }}
+      - name: Build backend Docker image
+        run: |
+          docker build -t dnd-vtt-backend:staging ./apps/backend
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ secrets.REGISTRY_URL }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          docker tag dnd-vtt-backend:staging ${{ secrets.REGISTRY_URL }}/dnd-vtt-backend:staging
+          docker push ${{ secrets.REGISTRY_URL }}/dnd-vtt-backend:staging
+      - name: Deploy to staging server
+        run: |
+          echo "Deploy to staging — configure for your hosting (Railway/Render/VPS)"
+          # Example for Railway:
+          # railway up --service backend --environment staging
+      - name: Comment on PRs
+        run: |
+          echo "Staging deployed: ${{ secrets.STAGING_URL }}"

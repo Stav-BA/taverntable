@@ -1,0 +1,53 @@
+name: Deploy — Production
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+jobs:
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run full test suite
+        run: pnpm -r test
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.TEST_REDIS_URL }}
+          NODE_ENV: test
+
+      - name: Build frontend
+        run: pnpm --filter @dnd-vtt/frontend build
+        env:
+          VITE_BACKEND_URL: ${{ secrets.PROD_BACKEND_URL }}
+
+      - name: Build & push backend Docker image
+        run: |
+          docker build -t dnd-vtt-backend:${{ github.sha }} ./apps/backend
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ secrets.REGISTRY_URL }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          docker tag dnd-vtt-backend:${{ github.sha }} ${{ secrets.REGISTRY_URL }}/dnd-vtt-backend:latest
+          docker tag dnd-vtt-backend:${{ github.sha }} ${{ secrets.REGISTRY_URL }}/dnd-vtt-backend:${{ github.sha }}
+          docker push ${{ secrets.REGISTRY_URL }}/dnd-vtt-backend:latest
+          docker push ${{ secrets.REGISTRY_URL }}/dnd-vtt-backend:${{ github.sha }}
+
+      - name: Deploy to production
+        run: echo "Deploy to production — configure for your hosting provider"
+
+      - name: Create Sentry release
+        run: echo "Optional: notify Sentry of new release for error tracking"
+
+      - name: Notify team
+        run: echo "Optional: send Slack/Discord notification on successful deploy"
