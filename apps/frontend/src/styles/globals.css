@@ -1,0 +1,390 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400;1,600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================
+   TavernTable Global Design System
+   Parchment + Dark Brown + Gold illustrated/woodcut aesthetic
+   ========================================================= */
+
+:root {
+  --color-parchment: #f4e4bc;
+  --color-parchment-dark: #e8d5a0;
+  --color-dark-brown: #2d1b00;
+  --color-medium-brown: #5c3d1e;
+  --color-gold: #c9a227;
+  --color-gold-light: #e8c84a;
+  --color-deep-red: #8b1a1a;
+  --color-forest-green: #2d5016;
+  --color-ink: #1a0f00;
+  --font-header: 'Cinzel', serif;
+  --font-body: 'Crimson Text', Georgia, serif;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-dark-brown);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-header);
+    letter-spacing: 0.05em;
+  }
+
+  ::selection {
+    background-color: var(--color-gold);
+    color: var(--color-dark-brown);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-dark-brown);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-medium-brown);
+    border-radius: 4px;
+    border: 1px solid var(--color-gold);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-gold);
+  }
+}
+
+@layer components {
+  /* --- Parchment Panel --- */
+  .parchment-panel {
+    @apply bg-parchment border-2 border-medium-brown relative;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+    box-shadow:
+      0 4px 12px rgba(45, 27, 0, 0.4),
+      inset 0 1px 0 rgba(201, 162, 39, 0.3),
+      inset 0 -1px 0 rgba(45, 27, 0, 0.2);
+  }
+
+  .parchment-panel::before {
+    content: '';
+    @apply absolute inset-0 pointer-events-none;
+    background: linear-gradient(
+      135deg,
+      rgba(201, 162, 39, 0.08) 0%,
+      transparent 40%,
+      rgba(45, 27, 0, 0.05) 100%
+    );
+  }
+
+  /* --- Gold decorative border --- */
+  .border-ornate {
+    border: 2px solid var(--color-gold);
+    box-shadow:
+      0 0 0 1px rgba(201, 162, 39, 0.3),
+      inset 0 0 0 1px rgba(201, 162, 39, 0.1);
+  }
+
+  /* --- Tavern Button (primary) --- */
+  .btn-tavern {
+    @apply font-cinzel font-semibold uppercase tracking-widest px-6 py-3 relative overflow-hidden cursor-pointer;
+    background: linear-gradient(135deg, #c9a227 0%, #a8831a 50%, #c9a227 100%);
+    color: var(--color-dark-brown);
+    border: 2px solid #8a6810;
+    box-shadow:
+      0 4px 12px rgba(45, 27, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 0 -1px 0 rgba(45, 27, 0, 0.3);
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+    transition: all 0.2s ease;
+  }
+
+  .btn-tavern:hover {
+    background: linear-gradient(135deg, #e8c84a 0%, #c9a227 50%, #e8c84a 100%);
+    box-shadow:
+      0 6px 16px rgba(45, 27, 0, 0.5),
+      0 0 20px rgba(201, 162, 39, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-tavern:active {
+    transform: translateY(1px);
+    box-shadow:
+      0 2px 6px rgba(45, 27, 0, 0.4),
+      inset 0 2px 4px rgba(45, 27, 0, 0.3);
+  }
+
+  /* --- Tavern Button (secondary/ghost) --- */
+  .btn-tavern-ghost {
+    @apply font-cinzel font-semibold uppercase tracking-widest px-6 py-3 relative overflow-hidden cursor-pointer;
+    background: transparent;
+    color: var(--color-parchment);
+    border: 2px solid var(--color-gold);
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(201, 162, 39, 0.2);
+    transition: all 0.2s ease;
+  }
+
+  .btn-tavern-ghost:hover {
+    background: rgba(201, 162, 39, 0.15);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      0 0 16px rgba(201, 162, 39, 0.3),
+      inset 0 1px 0 rgba(201, 162, 39, 0.3);
+    transform: translateY(-1px);
+  }
+
+  /* --- Sidebar dark panel --- */
+  .sidebar-panel {
+    background: linear-gradient(180deg, #3d2408 0%, #2d1b00 100%);
+    border-right: 2px solid var(--color-gold);
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.5);
+  }
+
+  .sidebar-panel-right {
+    background: linear-gradient(180deg, #3d2408 0%, #2d1b00 100%);
+    border-left: 2px solid var(--color-gold);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
+  }
+
+  /* --- Section header in sidebar --- */
+  .section-header {
+    @apply font-cinzel text-gold font-semibold uppercase tracking-wider text-sm py-2 px-3;
+    background: linear-gradient(90deg, rgba(201, 162, 39, 0.2) 0%, transparent 100%);
+    border-bottom: 1px solid rgba(201, 162, 39, 0.3);
+    text-shadow: 0 0 8px rgba(201, 162, 39, 0.5);
+  }
+
+  /* --- Input field styled for tavern --- */
+  .input-tavern {
+    @apply w-full px-3 py-2 font-crimson text-base;
+    background: rgba(45, 27, 0, 0.6);
+    border: 1px solid var(--color-gold);
+    color: var(--color-parchment);
+    outline: none;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .input-tavern:focus {
+    border-color: var(--color-gold-light);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.4),
+      0 0 8px rgba(201, 162, 39, 0.3);
+  }
+
+  .input-tavern::placeholder {
+    color: rgba(244, 228, 188, 0.4);
+  }
+
+  /* --- Dice face --- */
+  .dice-face {
+    @apply font-cinzel font-bold text-gold flex items-center justify-center cursor-pointer;
+    background: linear-gradient(135deg, #3d2408 0%, #2d1b00 100%);
+    border: 2px solid var(--color-gold);
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(201, 162, 39, 0.3);
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+
+  .dice-face:hover {
+    background: linear-gradient(135deg, #5c3d1e 0%, #3d2408 100%);
+    box-shadow:
+      0 6px 12px rgba(0, 0, 0, 0.5),
+      0 0 12px rgba(201, 162, 39, 0.4),
+      inset 0 1px 0 rgba(201, 162, 39, 0.4);
+    transform: translateY(-2px);
+  }
+
+  .dice-face:active {
+    transform: translateY(0) scale(0.95);
+  }
+
+  /* --- HP Bar colours --- */
+  .hp-bar-full {
+    background: linear-gradient(90deg, #2d5016, #3d6b1e);
+  }
+
+  .hp-bar-medium {
+    background: linear-gradient(90deg, #8b6914, #c9a227);
+  }
+
+  .hp-bar-low {
+    background: linear-gradient(90deg, #8b1a1a, #c0392b);
+  }
+
+  /* --- Chat message types --- */
+  .chat-msg-player {
+    @apply bg-parchment-dark border-l-4;
+    border-left-color: var(--color-gold);
+  }
+
+  .chat-msg-dm {
+    @apply border-l-4;
+    background: rgba(139, 26, 26, 0.15);
+    border-left-color: var(--color-deep-red);
+  }
+
+  .chat-msg-system {
+    @apply text-center italic;
+    color: rgba(244, 228, 188, 0.6);
+  }
+
+  .chat-msg-roll {
+    @apply border-l-4;
+    background: rgba(45, 80, 22, 0.15);
+    border-left-color: var(--color-forest-green);
+  }
+
+  /* --- Current turn highlight --- */
+  .current-turn {
+    @apply animate-pulse-gold;
+    border: 2px solid var(--color-gold);
+    background: rgba(201, 162, 39, 0.1);
+  }
+
+  /* --- Woodcut ornament divider --- */
+  .ornament-divider {
+    @apply flex items-center gap-2 my-2;
+  }
+
+  .ornament-divider::before,
+  .ornament-divider::after {
+    content: '';
+    @apply flex-1 h-px;
+    background: linear-gradient(90deg, transparent, var(--color-gold), transparent);
+  }
+
+  /* --- Canvas wrapper --- */
+  .canvas-wrapper {
+    @apply relative overflow-hidden;
+    background: #0a0a0a;
+    cursor: default;
+  }
+
+  /* --- Toolbar button --- */
+  .toolbar-btn {
+    @apply flex flex-col items-center justify-center gap-1 px-3 py-2 text-xs font-cinzel uppercase tracking-wider cursor-pointer;
+    color: rgba(244, 228, 188, 0.7);
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+  }
+
+  .toolbar-btn:hover {
+    color: var(--color-gold);
+    background: rgba(201, 162, 39, 0.1);
+    border-color: rgba(201, 162, 39, 0.3);
+  }
+
+  .toolbar-btn.active {
+    color: var(--color-gold);
+    background: rgba(201, 162, 39, 0.15);
+    border-color: var(--color-gold);
+    box-shadow: 0 0 8px rgba(201, 162, 39, 0.3);
+  }
+
+  /* --- Condition badge --- */
+  .condition-badge {
+    @apply inline-flex items-center px-1.5 py-0.5 text-xs font-crimson rounded-sm;
+    background: rgba(45, 27, 0, 0.7);
+    border: 1px solid rgba(201, 162, 39, 0.4);
+    color: var(--color-parchment);
+  }
+}
+
+/* =========================================================
+   Landing page dice background animation
+   ========================================================= */
+.dice-bg-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.floating-die {
+  position: absolute;
+  font-family: var(--font-header);
+  font-size: 2rem;
+  color: rgba(201, 162, 39, 0.08);
+  animation: floatDie linear infinite;
+  user-select: none;
+}
+
+@keyframes floatDie {
+  0% {
+    transform: translateY(110vh) rotate(0deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-10vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* =========================================================
+   Roll Result popup
+   ========================================================= */
+.roll-result-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  animation: rollResultIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes rollResultIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5) rotate(-10deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+}
+
+/* =========================================================
+   PixiJS canvas fill
+   ========================================================= */
+#pixi-canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
