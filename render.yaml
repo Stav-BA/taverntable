@@ -4,8 +4,8 @@ services:
     name: taverntable-backend
     runtime: node
     plan: free
-    buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && pnpm --filter @taverntable/dnd-rules build && pnpm --filter @taverntable/backend build
-    startCommand: node apps/backend/dist/index.js
+    buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && pnpm --filter @taverntable/backend exec prisma generate
+    startCommand: pnpm --filter @taverntable/backend exec tsx src/index.ts
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
