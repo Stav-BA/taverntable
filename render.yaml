@@ -4,7 +4,7 @@ services:
     name: taverntable-backend
     runtime: node
     plan: free
-    buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && PRISMA_GENERATE_SKIP_AUTOINSTALL=1 node_modules/.bin/prisma generate --schema=apps/backend/src/db/schema.prisma
+    buildCommand: npm install -g pnpm@9 && pnpm install && node_modules/.bin/prisma generate --schema=apps/backend/src/db/schema.prisma
     startCommand: node_modules/.bin/tsx apps/backend/src/index.ts
     healthCheckPath: /health
     envVars:
@@ -39,7 +39,7 @@ services:
   - type: web
     name: taverntable-frontend
     runtime: static
-    buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && pnpm --filter @taverntable/dnd-rules build && pnpm --filter @taverntable/frontend build
+    buildCommand: npm install -g pnpm@9 && pnpm install && pnpm --filter @taverntable/dnd-rules build && pnpm --filter @taverntable/frontend build
     staticPublishPath: ./apps/frontend/dist
     pullRequestPreviewsEnabled: true
     routes:
