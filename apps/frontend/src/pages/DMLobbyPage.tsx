@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useGameStore } from '@/stores/gameStore';
 
@@ -13,6 +14,7 @@ function generateId(): string {
 
 export default function DMLobbyPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const availableMaps = useGameStore((s) => s.availableMaps);
   const setCurrentMap = useGameStore((s) => s.setCurrentMap);
   const setSession = useSessionStore((s) => s.setSession);
@@ -65,10 +67,12 @@ export default function DMLobbyPage() {
         ))}
 
         <div className="text-center mb-6">
-          <h1 className="font-cinzel font-bold text-3xl text-dark-brown mb-1">DM Command Post</h1>
+          <h1 className="font-cinzel font-bold text-3xl text-dark-brown mb-1">
+            {t('dm_lobby.title')}
+          </h1>
           <div className="ornament-divider">
             <span className="font-crimson text-medium-brown italic text-sm">
-              Prepare your session, Dungeon Master
+              {t('dm_lobby.subtitle')}
             </span>
           </div>
         </div>
@@ -77,7 +81,7 @@ export default function DMLobbyPage() {
           {/* Session Code Display */}
           <div className="parchment-panel rounded-sm p-4 text-center border-ornate">
             <p className="font-cinzel text-xs text-medium-brown uppercase tracking-widest mb-1">
-              Session Code — Share with Players
+              {t('dm_lobby.session_code')}
             </p>
             <p
               className="font-cinzel text-4xl font-black tracking-[0.4em] text-dark-brown"
@@ -91,14 +95,14 @@ export default function DMLobbyPage() {
               className="mt-2 font-cinzel text-xs text-medium-brown uppercase tracking-wider opacity-60 hover:opacity-100 transition-opacity"
               style={{ background: 'none', border: 'none', cursor: 'pointer' }}
             >
-              📋 Copy Code
+              📋 {t('dm_lobby.copy_link')}
             </button>
           </div>
 
           {/* DM Name */}
           <div className="flex flex-col gap-1.5">
             <label className="font-cinzel text-sm font-semibold text-dark-brown uppercase tracking-wider">
-              Your DM Name
+              {t('dm_lobby.your_dm_name')}
             </label>
             <input
               type="text"
@@ -122,7 +126,7 @@ export default function DMLobbyPage() {
           {/* Map Picker */}
           <div className="flex flex-col gap-2">
             <label className="font-cinzel text-sm font-semibold text-dark-brown uppercase tracking-wider">
-              Starting Map
+              {t('dm_lobby.map')}
             </label>
             <div className="flex flex-col gap-2">
               {availableMaps.map((map) => (
@@ -168,8 +172,12 @@ export default function DMLobbyPage() {
           <div className="flex items-center justify-between p-3 rounded-sm"
             style={{ background: 'rgba(45,27,0,0.08)', border: '1px solid #5c3d1e' }}>
             <div>
-              <p className="font-cinzel text-sm font-semibold text-dark-brown">Fog of War</p>
-              <p className="font-crimson text-xs text-medium-brown">Players see only revealed areas</p>
+              <p className="font-cinzel text-sm font-semibold text-dark-brown">
+                {t('dm_lobby.fog_of_war')}
+              </p>
+              <p className="font-crimson text-xs text-medium-brown">
+                {t('dm_lobby.fog_description')}
+              </p>
             </div>
             <button
               type="button"
@@ -196,7 +204,9 @@ export default function DMLobbyPage() {
             className="btn-tavern text-base py-4 rounded-sm w-full mt-2"
             style={{ opacity: isCreating || !dmName.trim() ? 0.7 : 1 }}
           >
-            {isCreating ? '⏳ Opening the tavern doors...' : '⚔️ Begin the Adventure'}
+            {isCreating
+              ? `⏳ ${t('dm_lobby.launching')}`
+              : `⚔️ ${t('dm_lobby.launch')}`}
           </button>
         </div>
 
@@ -207,7 +217,7 @@ export default function DMLobbyPage() {
           className="w-full text-center font-cinzel text-xs uppercase tracking-wider mt-4 opacity-50 hover:opacity-80 transition-opacity"
           style={{ color: '#2d1b00', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          ← Return to Landing
+          ← {t('dm_lobby.back')}
         </button>
       </div>
     </div>

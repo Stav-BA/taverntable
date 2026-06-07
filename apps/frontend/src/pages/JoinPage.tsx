@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useSessionStore } from '@/stores/sessionStore';
 
 const TOKEN_COLOURS = [
@@ -20,6 +21,7 @@ function generateId() {
 export default function JoinPage() {
   const { code } = useParams<{ code?: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [sessionCode, setSessionCode] = useState(code?.toUpperCase() ?? '');
   const [playerName, setPlayerName] = useState('');
@@ -42,11 +44,11 @@ export default function JoinPage() {
     setError('');
 
     if (sessionCode.length !== 6) {
-      setError('Session code must be 6 characters.');
+      setError(t('join.error_code_length'));
       return;
     }
     if (!playerName.trim()) {
-      setError('Please enter your player name.');
+      setError(t('join.error_name_required'));
       return;
     }
 
@@ -87,10 +89,12 @@ export default function JoinPage() {
 
         {/* Header */}
         <div className="text-center mb-6">
-          <h1 className="font-cinzel font-bold text-3xl text-dark-brown mb-1">Enter the Tavern</h1>
+          <h1 className="font-cinzel font-bold text-3xl text-dark-brown mb-1">
+            {t('join.title')}
+          </h1>
           <div className="ornament-divider">
             <span className="font-crimson text-medium-brown italic text-sm">
-              Join your party at the table
+              {t('join.subtitle')}
             </span>
           </div>
         </div>
@@ -99,13 +103,13 @@ export default function JoinPage() {
           {/* Session Code */}
           <div className="flex flex-col gap-1.5">
             <label className="font-cinzel text-sm font-semibold text-dark-brown uppercase tracking-wider">
-              Session Code
+              {t('join.code_label')}
             </label>
             <input
               type="text"
               value={sessionCode}
               onChange={(e) => handleSessionCodeChange(e.target.value)}
-              placeholder="TAVERN"
+              placeholder={t('join.code_placeholder')}
               maxLength={6}
               className="text-center text-2xl tracking-[0.4em] font-cinzel"
               style={{
@@ -129,13 +133,13 @@ export default function JoinPage() {
           {/* Player Name */}
           <div className="flex flex-col gap-1.5">
             <label className="font-cinzel text-sm font-semibold text-dark-brown uppercase tracking-wider">
-              Your Name
+              {t('join.name_label')}
             </label>
             <input
               type="text"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              placeholder="Brave Adventurer"
+              placeholder={t('join.name_placeholder')}
               maxLength={30}
               style={{
                 background: 'rgba(45,27,0,0.08)',
@@ -158,7 +162,7 @@ export default function JoinPage() {
           {/* Character Mode */}
           <div className="flex flex-col gap-2">
             <label className="font-cinzel text-sm font-semibold text-dark-brown uppercase tracking-wider">
-              Character
+              {t('join.character_label')}
             </label>
             <div className="flex gap-2">
               {(['new', 'existing'] as const).map((mode) => (
@@ -175,7 +179,7 @@ export default function JoinPage() {
                     cursor: 'pointer',
                   }}
                 >
-                  {mode === 'new' ? '+ Create New' : '📋 Use Existing'}
+                  {mode === 'new' ? t('join.new_character') : `📋 ${t('join.existing_character')}`}
                 </button>
               ))}
             </div>
@@ -185,7 +189,7 @@ export default function JoinPage() {
                 type="text"
                 value={characterName}
                 onChange={(e) => setCharacterName(e.target.value)}
-                placeholder="Character name (optional)"
+                placeholder={t('join.character_name_placeholder')}
                 maxLength={40}
                 style={{
                   background: 'rgba(45,27,0,0.08)',
@@ -209,7 +213,7 @@ export default function JoinPage() {
           {/* Token Colour */}
           <div className="flex flex-col gap-2">
             <label className="font-cinzel text-sm font-semibold text-dark-brown uppercase tracking-wider">
-              Token Colour
+              {t('join.token_label')}
             </label>
             <div className="flex gap-2 flex-wrap">
               {TOKEN_COLOURS.map((c) => (
@@ -252,7 +256,7 @@ export default function JoinPage() {
             className="btn-tavern text-base py-4 rounded-sm mt-2 w-full"
             style={{ opacity: isLoading ? 0.7 : 1 }}
           >
-            {isLoading ? '⏳ Finding your seat...' : '🍺 Enter the Tavern'}
+            {isLoading ? `⏳ ${t('join.joining')}` : `🍺 ${t('join.join_btn')}`}
           </button>
         </form>
 
@@ -263,7 +267,7 @@ export default function JoinPage() {
           className="w-full text-center font-cinzel text-xs uppercase tracking-wider mt-4 opacity-50 hover:opacity-80 transition-opacity"
           style={{ color: '#2d1b00', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          ← Return to Landing
+          ← {t('join.back')}
         </button>
       </div>
     </div>
