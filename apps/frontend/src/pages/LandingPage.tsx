@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const DICE_SYMBOLS = ['⚄', 'D20', 'D12', 'D8', 'D6', 'D4', '⚃', 'D10', 'D100'];
 
@@ -23,6 +24,7 @@ function generateDice(count: number): FloatingDie[] {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const diceRef = useRef<FloatingDie[]>(generateDice(20));
 
   return (
@@ -103,7 +105,7 @@ export default function LandingPage() {
           </p>
           <div className="ornament-divider w-96">
             <span className="font-cinzel text-gold text-xs tracking-[0.3em] whitespace-nowrap">
-              Every great adventure starts at the tavern
+              {t('landing.hero')}
             </span>
           </div>
         </div>
@@ -114,30 +116,30 @@ export default function LandingPage() {
             className="btn-tavern text-base px-10 py-4 rounded-sm min-w-[220px]"
             onClick={() => navigate('/dm')}
           >
-            ⚔ Start New Adventure
+            ⚔ {t('landing.cta_dm')}
           </button>
           <button
             className="btn-tavern-ghost text-base px-10 py-4 rounded-sm min-w-[220px]"
             onClick={() => navigate('/join')}
           >
-            🗺 Join a Game
+            🗺 {t('landing.cta_player')}
           </button>
         </div>
 
         {/* Feature list */}
         <div className="grid grid-cols-3 gap-6 mt-8 opacity-70">
           {[
-            { icon: '🗡️', label: 'Live Combat' },
-            { icon: '🌫️', label: 'Fog of War' },
-            { icon: '🎲', label: '3D Dice' },
-          ].map(({ icon, label }) => (
-            <div key={label} className="flex flex-col items-center gap-1">
+            { icon: '🗡️', labelKey: 'landing.feature_combat' },
+            { icon: '🌫️', labelKey: 'landing.feature_fog' },
+            { icon: '🎲', labelKey: 'landing.feature_dice' },
+          ].map(({ icon, labelKey }) => (
+            <div key={labelKey} className="flex flex-col items-center gap-1">
               <span className="text-3xl">{icon}</span>
               <span
                 className="font-cinzel text-xs tracking-widest uppercase"
                 style={{ color: 'rgba(201,162,39,0.7)' }}
               >
-                {label}
+                {t(labelKey)}
               </span>
             </div>
           ))}
@@ -150,7 +152,7 @@ export default function LandingPage() {
           className="font-crimson text-sm"
           style={{ color: 'rgba(244,228,188,0.3)' }}
         >
-          Powered by React + PixiJS + D&D 5e 2024 Rules
+          {t('landing.powered_by')}
         </span>
       </div>
     </div>

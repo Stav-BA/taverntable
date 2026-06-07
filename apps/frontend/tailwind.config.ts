@@ -63,7 +63,14 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // RTL support: adds rtl: and ltr: variants so components can use
+    // e.g. `rtl:text-right ltr:text-left` based on [dir] attribute on <html>
+    ({ addVariant }: { addVariant: (name: string, selector: string) => void }) => {
+      addVariant('rtl', '[dir="rtl"] &');
+      addVariant('ltr', '[dir="ltr"] &');
+    },
+  ],
 };
 
 export default config;
