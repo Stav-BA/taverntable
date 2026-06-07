@@ -3,32 +3,30 @@ import type { RevealedArea, MapConfig } from '@/stores/gameStore';
 
 type OnReveal = (area: RevealedArea) => void;
 
+/**
+ * FogOfWar — PixiJS 8 implementation
+ *
+ * Uses Graphics.cut() to punch transparent holes into the fog rectangle.
+ * Pattern: g.rect(...).fill(fogColor).circle(cx,cy,r).cut()
+ * PixiJS 8 internally uses Canvas2D evenodd fill rule for .cut().
+ */
 export class FogOfWar {
   private container: Container;
-  private fogBg: Graphics;       // opaque black fog background
-  private eraser: Graphics;      // draws "holes" using blendMode erase
+  private fogGraphics: Graphics;
+  private dmOverlay: Graphics | null = null;
   private brushActive = false;
-  private brushMode: 'reveal' | 'hide' = 'reveal';
   private brushRadius = 70;
   private enabled = true;
   private isDM = false;
   private onReveal: OnReveal;
+  private _dmBrushSetup = false;
 
   constructor(private app: Application, onReveal: OnReveal) {
     this.onReveal = onReveal;
-
-    // Render group = off-screen compositing buffer so blendMode erase works
     this.container = new Container();
     this.container.label = 'fog-layer';
-    (this.container as any).isRenderGroup = true;
-
-    this.fogBg = new Graphics();
-    this.eraser = new Graphics();
-    // blendMode 'erase' punches transparent holes in the fog buffer
-    (this.eraser as any).blendMode = 'erase';
-
-    this.container.addChild(this.fogBg);
-    this.container.addChild(this.eraser);
+    this.fogGraphics = new Graphics();
+    this.container.addChild(this.fogGraphics);
   }
 
   attachToStage(index: number): void {
@@ -40,13 +38,13 @@ export class FogOfWar {
     this.isDM = isDM;
     this.container.visible = enabled;
 
-    if (isDM) {
-      this.setupDMBrush();
+    if (isDM && !this._dmBrushSetup) {
+      this._setupDMBrush();
     }
   }
 
-  setBrushMode(mode: 'reveal' | 'hide'): void {
-    this.brushMode = mode;
+  setBrushMode(_mode: 'reveal' | 'hide'): void {
+    // Future: support hide mode
   }
 
   setBrushRadius(radius: number): void {
@@ -54,45 +52,45 @@ export class FogOfWar {
   }
 
   drawFog(_config: MapConfig): void {
-    this.redraw([], true);
+    this._redraw([], true);
   }
 
   updateRevealed(areas: RevealedArea[], _config: MapConfig): void {
-    this.redraw(areas, false);
+    this._redraw(areas, false);
   }
 
-  private redraw(areas: RevealedArea[], fullCover: boolean): void {
-    this.fogBg.clear();
-    this.eraser.clear();
+  private _redraw(areas: RevealedArea[], fullCover: boolean): void {
+    this.fogGraphics.clear();
 
     if (!this.enabled) return;
 
     const w = this.app.screen.width;
     const h = this.app.screen.height;
-
-    // Full-screen fog — DM sees semi-transparent (0.55), players see near-opaque (0.95)
+    // DM sees semi-transparent fog (can see map dimly); players see near-opaque
     const fogAlpha = this.isDM ? 0.55 : 0.95;
-    this.fogBg.rect(0, 0, w, h).fill({ color: 0x000000, alpha: fogAlpha });
 
-    if (fullCover) return; // initial draw, no revealed areas yet
+    if (fullCover || areas.length === 0) {
+      // Solid fog, no holes
+      this.fogGraphics.rect(0, 0, w, h).fill({ color: 0x000000, alpha: fogAlpha });
+      return;
+    }
 
-    // Erase revealed areas — each circle punches a transparent hole in the fog
+    // Draw fog rect first, then cut revealed holes
+    this.fogGraphics.rect(0, 0, w, h).fill({ color: 0x000000, alpha: fogAlpha });
+
     for (const area of areas) {
-      this.drawErasedArea(area);
+      this._cutArea(area);
     }
   }
 
-  private drawErasedArea(area: RevealedArea): void {
+  private _cutArea(area: RevealedArea): void {
     if (
       area.type === 'circle' &&
       area.cx !== undefined &&
       area.cy !== undefined &&
       area.radius !== undefined
     ) {
-      // Soft feathered edge — draw multiple circles with decreasing opacity
-      const r = area.radius;
-      // Full erase in the centre
-      this.eraser.circle(area.cx, area.cy, r).fill({ color: 0xffffff, alpha: 1 });
+      this.fogGraphics.circle(area.cx, area.cy, area.radius).cut();
     } else if (
       area.type === 'rect' &&
       area.x !== undefined &&
@@ -100,37 +98,32 @@ export class FogOfWar {
       area.width !== undefined &&
       area.height !== undefined
     ) {
-      this.eraser
-        .rect(area.x, area.y, area.width, area.height)
-        .fill({ color: 0xffffff, alpha: 1 });
+      this.fogGraphics.rect(area.x, area.y, area.width, area.height).cut();
     } else if (area.type === 'polygon' && area.points && area.points.length >= 3) {
-      this.eraser
-        .poly(area.points.flatMap((p) => [p.x, p.y]))
-        .fill({ color: 0xffffff, alpha: 1 });
+      this.fogGraphics.poly(area.points.flatMap((p) => [p.x, p.y])).cut();
     }
   }
 
-  private _dmBrushSetup = false;
-
-  private setupDMBrush(): void {
+  private _setupDMBrush(): void {
     if (!this.isDM || this._dmBrushSetup) return;
     this._dmBrushSetup = true;
 
-    // Transparent overlay captures pointer events for the DM brush
-    const dmOverlay = new Graphics();
-    dmOverlay
+    // Transparent overlay on top of the fog to capture pointer events for the DM brush
+    const overlay = new Graphics();
+    overlay
       .rect(0, 0, this.app.screen.width, this.app.screen.height)
       .fill({ color: 0x000000, alpha: 0.001 });
-    dmOverlay.eventMode = 'static';
-    this.container.addChild(dmOverlay);
+    overlay.eventMode = 'static';
+    this.dmOverlay = overlay;
+    this.container.addChild(overlay);
 
     let isDrawing = false;
 
-    dmOverlay.on('pointerdown', () => {
+    overlay.on('pointerdown', () => {
       isDrawing = true;
     });
 
-    dmOverlay.on('pointermove', (e: FederatedPointerEvent) => {
+    overlay.on('pointermove', (e: FederatedPointerEvent) => {
       if (!isDrawing) return;
 
       const area: RevealedArea = {
@@ -144,13 +137,8 @@ export class FogOfWar {
       this.onReveal(area);
     });
 
-    dmOverlay.on('pointerup', () => {
-      isDrawing = false;
-    });
-
-    dmOverlay.on('pointerupoutside', () => {
-      isDrawing = false;
-    });
+    overlay.on('pointerup', () => { isDrawing = false; });
+    overlay.on('pointerupoutside', () => { isDrawing = false; });
   }
 
   getContainer(): Container {

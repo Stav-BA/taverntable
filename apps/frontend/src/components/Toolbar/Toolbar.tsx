@@ -30,7 +30,13 @@ export default function Toolbar() {
   const visibleTools = TOOLS.filter((t) => !t.dmOnly || isDM);
 
   const handleMapChange = (mapId: string) => {
-    socketEmit.mapChange(mapId);
+    const { availableMaps, setCurrentMap } = useGameStore.getState();
+    const mapConfig = availableMaps.find((m) => m.id === mapId);
+    if (!mapConfig) return;
+    // Update local store immediately so the DM sees the map without waiting for round-trip
+    setCurrentMap(mapConfig);
+    // Broadcast full config so backend stores mapId and all players receive the full MapConfig
+    socketEmit.mapChange(mapId, mapConfig as unknown as Record<string, unknown>);
   };
 
   return (

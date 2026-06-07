@@ -77,7 +77,8 @@ export function useSocket() {
         initiative?: Combatant[];
         currentTurnIndex?: number;
         inCombat?: boolean;
-        currentMap?: MapConfig;
+        currentMap?: MapConfig | null;
+        mapId?: string | null;
         connectedPlayers?: PlayerInfo[];
       }) => {
         if (state.tokens) setTokens(state.tokens);
@@ -85,7 +86,16 @@ export function useSocket() {
         if (state.fogEnabled !== undefined) setFogEnabled(state.fogEnabled);
         if (state.initiative) setInitiative(state.initiative);
         if (state.inCombat !== undefined) setInCombat(state.inCombat);
-        if (state.currentMap) setCurrentMap(state.currentMap);
+
+        // Resolve map: prefer full MapConfig, fall back to resolving mapId from availableMaps
+        if (state.currentMap) {
+          setCurrentMap(state.currentMap);
+        } else if (state.mapId) {
+          const { availableMaps } = useGameStore.getState();
+          const resolved = availableMaps.find((m) => m.id === state.mapId);
+          if (resolved) setCurrentMap(resolved);
+        }
+
         if (state.connectedPlayers) setConnectedPlayers(state.connectedPlayers);
         applyServerState({
           currentTurnIndex: state.currentTurnIndex ?? 0,
@@ -163,14 +173,23 @@ export function useSocket() {
     });
 
     // Map change
-    socket.on('map:changed', (mapConfig: MapConfig) => {
-      setCurrentMap(mapConfig);
-      addChatMessage({
-        id: `sys-${Date.now()}`,
-        type: 'system',
-        text: `The scene changes to: ${mapConfig.name}`,
-        timestamp: Date.now(),
-      });
+    socket.on('map:changed', (mapData: MapConfig | { id: string }) => {
+      const { availableMaps } = useGameStore.getState();
+      // Resolve partial { id } or full MapConfig
+      const mapConfig: MapConfig | undefined =
+        'gridCols' in mapData
+          ? (mapData as MapConfig)
+          : availableMaps.find((m) => m.id === (mapData as { id: string }).id);
+
+      if (mapConfig) {
+        setCurrentMap(mapConfig);
+        addChatMessage({
+          id: `sys-${Date.now()}`,
+          type: 'system',
+          text: `The scene changes to: ${mapConfig.name}`,
+          timestamp: Date.now(),
+        });
+      }
     });
 
     // Chat

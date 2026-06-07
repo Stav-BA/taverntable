@@ -136,6 +136,8 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
         initiative: [],
         currentTurnIndex: gameState?.currentTurn ?? 0,
         inCombat: false,
+        // Send mapId so frontend can resolve → MapConfig from its availableMaps list
+        mapId: gameState?.mapId ?? null,
         currentMap: null,
       };
 

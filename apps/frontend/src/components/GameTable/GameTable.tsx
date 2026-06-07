@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import LeftSidebar from './LeftSidebar';
 import RightSidebar from './RightSidebar';
 import Toolbar from '@/components/Toolbar/Toolbar';
@@ -8,6 +8,7 @@ import CanvasContainer from '@/canvas/CanvasContainer';
 import CharacterCreationModal from '@/components/CharacterCreationModal';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useGameStore } from '@/stores/gameStore';
+import { socketEmit } from '@/lib/socket';
 import { useNavigate } from 'react-router-dom';
 
 export default function GameTable() {
@@ -15,7 +16,27 @@ export default function GameTable() {
   const player = useSessionStore((s) => s.player);
   const clearSession = useSessionStore((s) => s.clearSession);
   const tokens = useGameStore((s) => s.tokens);
+  const currentMap = useGameStore((s) => s.currentMap);
   const navigate = useNavigate();
+
+  // DM: auto-load the first available map if none is set yet
+  // (runs once after socket connects and game:state is received)
+  const [dmMapSynced, setDmMapSynced] = useState(false);
+  useEffect(() => {
+    if (!isDM || dmMapSynced || currentMap) return;
+    // Give socket ~2 s to receive game:state; if still no map, load the default
+    const timer = setTimeout(() => {
+      if (useGameStore.getState().currentMap) return; // already set
+      const { availableMaps, setCurrentMap } = useGameStore.getState();
+      const defaultMap = availableMaps[0];
+      if (defaultMap) {
+        setCurrentMap(defaultMap);
+        socketEmit.mapChange(defaultMap.id, defaultMap as unknown as Record<string, unknown>);
+      }
+      setDmMapSynced(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [isDM, dmMapSynced, currentMap]);
 
   // Show character creation modal for players who haven't created a token yet
   const playerToken = player ? tokens.find((t) => t.playerId === player.id) : undefined;
