@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
-import { updateToken, revealFog, advanceTurn } from '../../redis/sessionState';
+import { updateToken, addToken, revealFog, setGameMap, setInitiative, advanceTurn } from '../../redis/sessionState';
+import type { Token, RevealedArea } from '../../redis/sessionState';
 
 interface SocketWithMeta extends Socket {
   _sessionId?: string;
@@ -9,87 +10,190 @@ interface SocketWithMeta extends Socket {
 export function registerGameHandlers(io: Server, socket: Socket): void {
   const s = socket as SocketWithMeta;
 
+  // ── Token: move ─────────────────────────────────────────────────────────────
   socket.on('token:move', async (payload: { tokenId: string; x: number; y: number }) => {
     try {
       const sessionId = s._sessionId;
-      if (!sessionId) {
-        socket.emit('error', { code: 'NOT_IN_SESSION', message: 'Join a session first' });
-        return;
-      }
+      if (!sessionId) return;
 
       const { tokenId, x, y } = payload;
-      if (!tokenId || typeof x !== 'number' || typeof y !== 'number') {
-        socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'tokenId, x, y are required' });
-        return;
-      }
+      if (!tokenId || typeof x !== 'number' || typeof y !== 'number') return;
 
-      const state = await updateToken(sessionId, tokenId, x, y);
-      if (!state) {
-        socket.emit('error', { code: 'STATE_NOT_FOUND', message: 'Game state not found' });
-        return;
-      }
-
-      // Broadcast to everyone in room (including sender)
+      await updateToken(sessionId, tokenId, x, y);
       io.to(sessionId).emit('token:moved', { tokenId, x, y, movedBy: s._playerId });
     } catch (err) {
       console.error('[token:move]', err);
-      socket.emit('error', { code: 'TOKEN_MOVE_FAILED', message: (err as Error).message });
     }
   });
 
-  socket.on('fog:reveal', async (payload: { polygonPoints: number[][] }) => {
+  // ── Token: add ──────────────────────────────────────────────────────────────
+  socket.on('token:add', async (payload: Token) => {
     try {
       const sessionId = s._sessionId;
-      if (!sessionId) {
-        socket.emit('error', { code: 'NOT_IN_SESSION', message: 'Join a session first' });
-        return;
-      }
+      if (!sessionId) return;
 
-      const { polygonPoints } = payload;
-      if (!Array.isArray(polygonPoints)) {
-        socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'polygonPoints must be an array' });
-        return;
-      }
+      const token: Token = {
+        id: payload.id || `tok-${Date.now()}`,
+        x: payload.x ?? 2,
+        y: payload.y ?? 2,
+        name: payload.name || 'Unknown',
+        hp: payload.hp ?? 10,
+        maxHp: payload.maxHp ?? 10,
+        ac: payload.ac ?? 10,
+        colour: payload.colour || '#4169E1',
+        isNpc: payload.isNpc ?? false,
+        isPlayer: payload.isPlayer ?? true,
+        playerId: payload.playerId,
+        conditions: [],
+        isVisible: true,
+      };
 
-      const state = await revealFog(sessionId, polygonPoints);
-      if (!state) {
-        socket.emit('error', { code: 'STATE_NOT_FOUND', message: 'Game state not found' });
-        return;
-      }
-
-      // Broadcast fog update to all in room
-      io.to(sessionId).emit('fog:updated', { fog: state.fog, revealedBy: s._playerId });
+      await addToken(sessionId, token);
+      io.to(sessionId).emit('token:added', token);
     } catch (err) {
-      console.error('[fog:reveal]', err);
-      socket.emit('error', { code: 'FOG_REVEAL_FAILED', message: (err as Error).message });
+      console.error('[token:add]', err);
     }
   });
 
+  // ── Token: update ───────────────────────────────────────────────────────────
+  socket.on('token:update', async (payload: { tokenId: string; updates: Partial<Token> }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+
+      const { tokenId, updates } = payload;
+      await updateToken(sessionId, tokenId, updates.x ?? 0, updates.y ?? 0);
+      io.to(sessionId).emit('token:updated', { tokenId, updates });
+    } catch (err) {
+      console.error('[token:update]', err);
+    }
+  });
+
+  // ── Token: remove ───────────────────────────────────────────────────────────
+  socket.on('token:remove', async (payload: { tokenId: string }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('token:removed', { tokenId: payload.tokenId });
+    } catch (err) {
+      console.error('[token:remove]', err);
+    }
+  });
+
+  // ── Fog: reveal ─────────────────────────────────────────────────────────────
+  socket.on('fog:reveal', async (payload: { area?: RevealedArea; polygonPoints?: number[][] }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+
+      if (payload.area) {
+        // New frontend format: { area: RevealedArea }
+        await revealFog(sessionId, payload.area);
+        io.to(sessionId).emit('fog:revealed', payload.area);
+      }
+    } catch (err) {
+      console.error('[fog:reveal]', err);
+    }
+  });
+
+  // ── Fog: toggle ─────────────────────────────────────────────────────────────
+  socket.on('fog:toggle', async (payload: { enabled: boolean }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('fog:toggled', { enabled: payload.enabled });
+    } catch (err) {
+      console.error('[fog:toggle]', err);
+    }
+  });
+
+  // ── Map: change ─────────────────────────────────────────────────────────────
+  socket.on('map:change', async (payload: { mapId: string; mapConfig?: unknown }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+
+      if (payload.mapId) {
+        await setGameMap(sessionId, payload.mapId);
+      }
+
+      // Broadcast the full map config if provided, otherwise just the id
+      io.to(sessionId).emit('map:changed', payload.mapConfig ?? { id: payload.mapId });
+    } catch (err) {
+      console.error('[map:change]', err);
+    }
+  });
+
+  // ── Initiative: set ─────────────────────────────────────────────────────────
+  socket.on('initiative:set', async (payload: { combatants: unknown[] }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('initiative:set', payload.combatants);
+    } catch (err) {
+      console.error('[initiative:set]', err);
+    }
+  });
+
+  // ── Initiative: next ────────────────────────────────────────────────────────
+  socket.on('initiative:next', async () => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('initiative:next');
+    } catch (err) {
+      console.error('[initiative:next]', err);
+    }
+  });
+
+  // ── Initiative: update ──────────────────────────────────────────────────────
+  socket.on('initiative:update', async (payload: { id: string; updates: Record<string, unknown> }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('initiative:updated', payload);
+    } catch (err) {
+      console.error('[initiative:update]', err);
+    }
+  });
+
+  // ── Combat: start ───────────────────────────────────────────────────────────
+  socket.on('combat:start', async () => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('combat:started');
+    } catch (err) {
+      console.error('[combat:start]', err);
+    }
+  });
+
+  // ── Combat: end ─────────────────────────────────────────────────────────────
+  socket.on('combat:end', async () => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('combat:ended');
+    } catch (err) {
+      console.error('[combat:end]', err);
+    }
+  });
+
+  // ── Ping ────────────────────────────────────────────────────────────────────
+  socket.on('ping', (payload: { x: number; y: number; colour: string }) => {
+    const sessionId = s._sessionId;
+    if (!sessionId) return;
+    socket.to(sessionId).emit('ping', { ...payload, playerId: s._playerId });
+  });
+
+  // ── Legacy turn:next ────────────────────────────────────────────────────────
   socket.on('turn:next', async () => {
     try {
       const sessionId = s._sessionId;
-      if (!sessionId) {
-        socket.emit('error', { code: 'NOT_IN_SESSION', message: 'Join a session first' });
-        return;
-      }
-
-      const state = await advanceTurn(sessionId);
-      if (!state) {
-        socket.emit('error', { code: 'STATE_NOT_FOUND', message: 'Game state not found' });
-        return;
-      }
-
-      const currentEntry = state.initiative[state.currentTurn];
-      const currentTurnPlayerId = currentEntry?.playerId ?? null;
-
-      io.to(sessionId).emit('turn:changed', {
-        currentTurnPlayerId,
-        currentTurn: state.currentTurn,
-        initiative: state.initiative,
-      });
+      if (!sessionId) return;
+      io.to(sessionId).emit('initiative:next');
     } catch (err) {
       console.error('[turn:next]', err);
-      socket.emit('error', { code: 'TURN_NEXT_FAILED', message: (err as Error).message });
     }
   });
 }

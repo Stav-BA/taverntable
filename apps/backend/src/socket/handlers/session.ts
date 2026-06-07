@@ -77,11 +77,24 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
     }
   });
 
-  socket.on('session:join', async (payload: { code: string; playerName: string }, ack) => {
+  socket.on('session:join', async (payload: {
+    code?: string;
+    sessionId?: string;   // frontend sends 'session-CODE'
+    playerId?: string;    // frontend-generated client ID
+    playerName?: string;
+    isDM?: boolean;
+    colour?: string;
+  }, ack) => {
     try {
-      const { code, playerName } = payload;
+      // Accept { code } OR { sessionId: 'session-CODE' } from frontend
+      let code = payload.code;
+      if (!code && payload.sessionId) {
+        code = payload.sessionId.replace(/^session-/i, '');
+      }
+      const playerName = payload.playerName;
+
       if (!code || !playerName) {
-        socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'code and playerName are required' });
+        socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'Session code and player name are required' });
         return;
       }
 
@@ -94,30 +107,42 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
         return;
       }
 
-      // Create or re-connect player
-      const player = await prisma.player.create({
-        data: {
-          sessionId: session.id,
-          name: playerName,
-          isConnected: true,
-        },
-      });
+      // Use client-provided playerId if given, else create one
+      const playerId = payload.playerId || socket.id;
 
       const gameState = await getGameState(session.id);
 
       await socket.join(session.id);
       socketMeta._sessionId = session.id;
-      socketMeta._playerId = player.id;
+      socketMeta._playerId = playerId;
 
-      // Notify others
-      socket.to(session.id).emit('player:joined', { playerId: player.id, name: player.name });
+      // Notify others of the joining player
+      socket.to(session.id).emit('player:joined', {
+        playerId,
+        name: playerName,
+        colour: payload.colour ?? '#4169E1',
+      });
 
-      const result = { sessionId: session.id, playerId: player.id, gameState };
+      // Build game:state response matching frontend useSocket.ts expectations
+      const fogRevealed = (gameState?.fog?.revealed ?? []) as Array<{
+        id?: string; type: string; cx?: number; cy?: number; radius?: number;
+        x?: number; y?: number; width?: number; height?: number;
+      }>;
+
+      const responseState = {
+        tokens: gameState?.tokens ?? [],
+        fogRevealed,
+        fogEnabled: true,
+        initiative: [],
+        currentTurnIndex: gameState?.currentTurn ?? 0,
+        inCombat: false,
+        currentMap: null,
+      };
 
       if (typeof ack === 'function') {
-        ack(result);
+        ack({ sessionId: session.id, playerId, ...responseState });
       } else {
-        socket.emit('game:state', result);
+        socket.emit('game:state', responseState);
       }
     } catch (err) {
       console.error('[session:join]', err);

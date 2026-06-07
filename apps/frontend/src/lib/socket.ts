@@ -40,6 +40,9 @@ export const socketEmit = {
   tokenMove: (tokenId: string, x: number, y: number) =>
     getSocket().emit('token:move', { tokenId, x, y }),
 
+  tokenAdd: (token: Record<string, unknown>) =>
+    getSocket().emit('token:add', token),
+
   tokenUpdate: (tokenId: string, updates: Record<string, unknown>) =>
     getSocket().emit('token:update', { tokenId, updates }),
 
@@ -60,7 +63,8 @@ export const socketEmit = {
   combatStart: () => getSocket().emit('combat:start'),
   combatEnd: () => getSocket().emit('combat:end'),
 
-  mapChange: (mapId: string) => getSocket().emit('map:change', { mapId }),
+  mapChange: (mapId: string, mapConfig?: Record<string, unknown>) =>
+    getSocket().emit('map:change', { mapId, mapConfig }),
 
   audioPlay: (trackId: string) => getSocket().emit('audio:play', { trackId }),
   audioPause: () => getSocket().emit('audio:pause'),

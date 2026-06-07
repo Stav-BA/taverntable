@@ -7,7 +7,9 @@ import { registerChatHandlers } from './handlers/chat';
 import { registerAIDMHandlers } from './handlers/aiDm';
 
 export function createSocketServer(httpServer: HttpServer): Server {
-  const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? [process.env.CORS_ORIGIN, 'http://localhost:5173']
+    : 'http://localhost:5173';
 
   const io = new Server(httpServer, {
     cors: {
