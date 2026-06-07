@@ -5,6 +5,7 @@ import cors from 'cors';
 import { createSocketServer } from './socket';
 import sessionsRouter from './api/routes/sessions';
 import charactersRouter from './api/routes/characters';
+import aiDmRouter from './api/routes/aiDm';
 import { errorHandler, notFoundHandler } from './api/middleware/errorHandler';
 import { prisma } from './db/client';
 import { redis } from './redis/client';
@@ -41,6 +42,7 @@ async function bootstrap(): Promise<void> {
   // API routes
   app.use('/api/sessions', sessionsRouter);
   app.use('/api/characters', charactersRouter);
+  app.use('/api/ai', aiDmRouter);
 
   // 404 + error handlers (must be last)
   app.use(notFoundHandler);
