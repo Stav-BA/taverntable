@@ -51,6 +51,13 @@ export class FogOfWar {
     this.brushRadius = radius;
   }
 
+  /** Called by CanvasContainer when the DM switches to/from a fog tool */
+  setFogToolActive(active: boolean): void {
+    if (this.dmOverlay) {
+      this.dmOverlay.eventMode = active ? 'static' : 'none';
+    }
+  }
+
   drawFog(_config: MapConfig): void {
     this._redraw([], true);
   }
@@ -108,12 +115,14 @@ export class FogOfWar {
     if (!this.isDM || this._dmBrushSetup) return;
     this._dmBrushSetup = true;
 
-    // Transparent overlay on top of the fog to capture pointer events for the DM brush
+    // Transparent overlay — only active (intercepts events) when fog tool is selected.
+    // eventMode starts as 'none'; call setFogToolActive(true) from CanvasContainer
+    // when the DM switches to a fog tool.
     const overlay = new Graphics();
     overlay
       .rect(0, 0, this.app.screen.width, this.app.screen.height)
       .fill({ color: 0x000000, alpha: 0.001 });
-    overlay.eventMode = 'static';
+    overlay.eventMode = 'none';
     this.dmOverlay = overlay;
     this.container.addChild(overlay);
 

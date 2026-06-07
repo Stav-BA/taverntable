@@ -27,6 +27,7 @@ export default function CanvasContainer() {
 
   const player = useSessionStore((s) => s.player);
   const isDM = useSessionStore((s) => s.isDM);
+  const activeTool = useSessionStore((s) => s.activeTool);
 
   // Initialise PixiJS
   useEffect(() => {
@@ -117,6 +118,13 @@ export default function CanvasContainer() {
       fogRef.current.updateRevealed(fogRevealed, currentMap);
     }
   }, [ready, fogEnabled, fogRevealed, isDM, currentMap]);
+
+  // Fog tool active — only let the DM brush paint when fog-reveal/fog-hide is selected
+  useEffect(() => {
+    if (!ready || !fogRef.current) return;
+    const isFogTool = activeTool === 'fog-reveal' || activeTool === 'fog-hide';
+    fogRef.current.setFogToolActive(isDM && isFogTool);
+  }, [ready, activeTool, isDM]);
 
   return (
     <div className="canvas-wrapper w-full h-full relative">
