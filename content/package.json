@@ -1,0 +1,14 @@
+{
+  "name": "@taverntable/content",
+  "version": "1.0.0",
+  "scripts": {
+    "validate": "tsx scripts/validate-content.ts",
+    "build": "tsx scripts/build-search-index.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "ajv": "^8.0.0",
+    "fuse.js": "^7.0.0",
+    "typescript": "^5.0.0"
+  }
+}
