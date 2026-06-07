@@ -1,0 +1,67 @@
+services:
+  # ── Backend API ─────────────────────────────────────────────────────────────
+  - type: web
+    name: taverntable-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && pnpm --filter @taverntable/dnd-rules build && pnpm --filter @taverntable/backend build
+    startCommand: node apps/backend/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taverntable-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: taverntable-redis
+          type: redis
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false   # Set manually in Render dashboard
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        fromService:
+          name: taverntable-frontend
+          type: web
+          property: host
+
+  # ── Frontend SPA ─────────────────────────────────────────────────────────────
+  - type: web
+    name: taverntable-frontend
+    runtime: static
+    plan: free
+    buildCommand: npm install -g pnpm@9 && pnpm install --frozen-lockfile && pnpm --filter @taverntable/dnd-rules build && pnpm --filter @taverntable/frontend build
+    staticPublishPath: ./apps/frontend/dist
+    pullRequestPreviewsEnabled: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  - type: redis
+    name: taverntable-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+databases:
+  - name: taverntable-db
+    databaseName: taverntable
+    user: taverntable
+    plan: free
+    postgresMajorVersion: 16
