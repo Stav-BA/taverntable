@@ -75,130 +75,104 @@ export class MapRenderer {
     return gfx;
   }
 
-  /** Warm wood plank floor — tavern / inn */
+  /**
+   * Warm wood plank floor — tavern / inn
+   * Colours chosen bright enough to show clearly through 55% fog.
+   */
   private drawTavernFloor(g: Graphics, w: number, h: number, cfg: MapConfig): void {
-    // Base warm wood colour
-    g.rect(0, 0, w, h).fill({ color: 0x5c3d1e });
+    // Base: warm medium oak
+    g.rect(0, 0, w, h).fill({ color: 0xb87c4a });
 
     const cellW = w / cfg.gridCols;
     const cellH = h / cfg.gridRows;
-    const plankH = cellH * 1.5;
+    const plankH = Math.max(cellH, 20);
 
-    // Horizontal wood planks
-    for (let row = 0; row < cfg.gridRows * 2; row++) {
-      const y = row * plankH * 0.5;
-      const offset = (row % 2) * (cellW * 1.5);
-      const shade = row % 3 === 0 ? 0x6b4423 : row % 3 === 1 ? 0x7a4f2a : 0x5a3418;
+    // Alternating wood plank rows
+    for (let row = 0; row < Math.ceil(h / plankH) + 1; row++) {
+      const y = row * plankH;
+      const shade = row % 2 === 0 ? 0xc4874f : 0xa86e3c;
       g.rect(0, y, w, plankH).fill({ color: shade });
-
-      // Wood grain lines
-      for (let x = offset; x < w + cellW * 3; x += cellW * 3) {
-        g.moveTo(x, y).lineTo(x + cellW * 0.3, y + plankH).stroke({ color: 0x4a2e12, width: 1, alpha: 0.4 });
-      }
     }
 
-    // Plank seam lines
-    for (let row = 0; row < cfg.gridRows * 2 + 1; row++) {
-      const y = row * plankH * 0.5;
-      g.moveTo(0, y).lineTo(w, y).stroke({ color: 0x3d2008, width: 1.5, alpha: 0.6 });
+    // Plank seam lines — dark brown
+    for (let row = 0; row <= Math.ceil(h / plankH) + 1; row++) {
+      const y = row * plankH;
+      g.moveTo(0, y).lineTo(w, y).stroke({ color: 0x5c3010, width: 2, alpha: 0.7 });
     }
 
-    // Subtle vignette around the edges (darker border)
-    g.rect(0, 0, w, 8).fill({ color: 0x000000, alpha: 0.3 });
-    g.rect(0, h - 8, w, 8).fill({ color: 0x000000, alpha: 0.3 });
-    g.rect(0, 0, 8, h).fill({ color: 0x000000, alpha: 0.3 });
-    g.rect(w - 8, 0, 8, h).fill({ color: 0x000000, alpha: 0.3 });
+    // Vertical grain marks every 2 grid columns
+    for (let col = 0; col < cfg.gridCols; col += 2) {
+      const x = col * cellW;
+      g.moveTo(x, 0).lineTo(x, h).stroke({ color: 0x7a4520, width: 1, alpha: 0.3 });
+    }
   }
 
-  /** Dark stone block floor — dungeon / cave */
+  /**
+   * Stone block floor — dungeon / cave
+   * Medium gray so it's visible through fog.
+   */
   private drawDungeonFloor(g: Graphics, w: number, h: number, cfg: MapConfig): void {
-    // Dark base
-    g.rect(0, 0, w, h).fill({ color: 0x1e1e2e });
+    // Base: medium cool gray
+    g.rect(0, 0, w, h).fill({ color: 0x888899 });
 
     const cellW = w / cfg.gridCols;
     const cellH = h / cfg.gridRows;
-    const bW = cellW * 1.5;
-    const bH = cellH * 0.75;
+    const bW = Math.max(cellW * 1.5, 40);
+    const bH = Math.max(cellH * 0.8, 24);
 
-    // Stone blocks — offset brickwork pattern
+    // Offset brickwork — alternating lighter / darker gray
     for (let row = 0; row < Math.ceil(h / bH) + 1; row++) {
       const yy = row * bH;
       const xOffset = (row % 2) * (bW * 0.5);
       for (let col = -1; col < Math.ceil(w / bW) + 1; col++) {
         const xx = col * bW + xOffset;
-        const shade = (row + col) % 3 === 0 ? 0x2a2a3e : (row + col) % 3 === 1 ? 0x252535 : 0x222232;
+        const shade = (row + col) % 2 === 0 ? 0x9a9aaa : 0x787888;
         g.rect(xx + 1, yy + 1, bW - 2, bH - 2).fill({ color: shade });
-
-        // Cracks / texture
-        if ((row * 3 + col * 7) % 11 === 0) {
-          g.moveTo(xx + bW * 0.3, yy + bH * 0.2)
-            .lineTo(xx + bW * 0.6, yy + bH * 0.5)
-            .lineTo(xx + bW * 0.5, yy + bH * 0.8)
-            .stroke({ color: 0x111120, width: 1, alpha: 0.5 });
-        }
       }
     }
 
-    // Mortar lines
+    // Mortar lines — dark gray
     for (let row = 0; row <= Math.ceil(h / bH); row++) {
-      const yy = row * bH;
-      g.moveTo(0, yy).lineTo(w, yy).stroke({ color: 0x111120, width: 2, alpha: 0.8 });
+      g.moveTo(0, row * bH).lineTo(w, row * bH).stroke({ color: 0x444455, width: 2, alpha: 0.8 });
     }
-
-    // Subtle torchlight warmth at centre
-    g.circle(w / 2, h / 2, Math.min(w, h) * 0.35).fill({ color: 0x3d2808, alpha: 0.08 });
   }
 
-  /** Grassy ground — forest / outdoor */
+  /**
+   * Grassy ground — forest / outdoor
+   * Bright medium greens.
+   */
   private drawForestGround(g: Graphics, w: number, h: number, cfg: MapConfig): void {
-    // Base grass
-    g.rect(0, 0, w, h).fill({ color: 0x2d5a1b });
+    // Base: medium grass green
+    g.rect(0, 0, w, h).fill({ color: 0x5a9e35 });
 
     const cellW = w / cfg.gridCols;
     const cellH = h / cfg.gridRows;
-    const patch = cellW * 0.9;
 
-    // Grass patches with varied shades
+    // Varied grass tiles
     for (let col = 0; col < cfg.gridCols; col++) {
       for (let row = 0; row < cfg.gridRows; row++) {
-        const x = col * cellW + cellW * 0.05;
-        const y = row * cellH + cellH * 0.05;
-        const shade =
-          (col * 3 + row * 7) % 5 === 0 ? 0x3a7022 :
-          (col * 3 + row * 7) % 5 === 1 ? 0x265018 :
-          (col * 3 + row * 7) % 5 === 2 ? 0x316219 :
-          (col * 3 + row * 7) % 5 === 3 ? 0x1e4014 : 0x2d5a1b;
-        g.rect(x, y, patch, patch).fill({ color: shade });
+        const idx = (col * 3 + row * 7) % 4;
+        const shade = idx === 0 ? 0x68b83e : idx === 1 ? 0x4e8c2b : idx === 2 ? 0x5fa532 : 0x72c040;
+        g.rect(col * cellW + 0.5, row * cellH + 0.5, cellW - 1, cellH - 1).fill({ color: shade });
       }
     }
 
-    // Scattered flowers / stones
-    for (let i = 0; i < 40; i++) {
-      const fx = ((i * 137 + 23) % cfg.gridCols) * cellW + cellW * 0.3;
-      const fy = ((i * 97 + 11) % cfg.gridRows) * cellH + cellH * 0.3;
-      const isFlower = i % 3 !== 0;
-      if (isFlower) {
-        g.circle(fx, fy, 3).fill({ color: i % 2 === 0 ? 0xffdd44 : 0xff8888, alpha: 0.8 });
-      } else {
-        g.rect(fx - 3, fy - 2, 6, 4).fill({ color: 0x888888, alpha: 0.6 });
-      }
+    // Scattered bright flowers
+    for (let i = 0; i < 30; i++) {
+      const fx = ((i * 137 + 23) % cfg.gridCols) * cellW + cellW * 0.4;
+      const fy = ((i * 97 + 11) % cfg.gridRows) * cellH + cellH * 0.4;
+      g.circle(fx, fy, 3).fill({ color: i % 2 === 0 ? 0xffee44 : 0xff9999 });
     }
-
-    // Subtle tree shadows at edges
-    g.rect(0, 0, 20, h).fill({ color: 0x000000, alpha: 0.25 });
-    g.rect(w - 20, 0, 20, h).fill({ color: 0x000000, alpha: 0.25 });
-    g.rect(0, 0, w, 20).fill({ color: 0x000000, alpha: 0.25 });
-    g.rect(0, h - 20, w, 20).fill({ color: 0x000000, alpha: 0.25 });
   }
 
-  /** Generic stone / neutral floor */
+  /** Generic — neutral medium-tone stone */
   private drawGenericFloor(g: Graphics, w: number, h: number, cfg: MapConfig): void {
-    g.rect(0, 0, w, h).fill({ color: 0x3a3040 });
+    g.rect(0, 0, w, h).fill({ color: 0x7a7080 });
     const cellW = w / cfg.gridCols;
     const cellH = h / cfg.gridRows;
     for (let col = 0; col < cfg.gridCols; col++) {
       for (let row = 0; row < cfg.gridRows; row++) {
-        const shade = (col + row) % 2 === 0 ? 0x383040 : 0x3e3648;
+        const shade = (col + row) % 2 === 0 ? 0x827088 : 0x726070;
         g.rect(col * cellW + 1, row * cellH + 1, cellW - 2, cellH - 2).fill({ color: shade });
       }
     }
