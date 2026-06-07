@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  dmUserId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  players   Player[]
+}
+
+model Player {
+  id          String     @id @default(cuid())
+  sessionId   String
+  name        String
+  colour      String     @default("#6366f1")
+  isConnected Boolean    @default(false)
+  characterId String?
+  session     Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  character   Character? @relation(fields: [characterId], references: [id])
+  createdAt   DateTime   @default(now())
+}
+
+model Character {
+  id        String   @id @default(cuid())
+  name      String
+  species   String
+  class     String
+  subclass  String?
+  level     Int      @default(1)
+  xp        Int      @default(0)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  players   Player[]
+}
+
+model Campaign {
+  id        String   @id @default(cuid())
+  name      String
+  notes     Json     @default("[]")
+  npcs      Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  maps      Map[]
+}
+
+model Map {
+  id         String    @id @default(cuid())
+  campaignId String?
+  name       String
+  imageUrl   String
+  gridSize   Int       @default(70)
+  fogData    Json      @default("{}")
+  tokenData  Json      @default("[]")
+  wallData   Json      @default("[]")
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  createdAt  DateTime  @default(now())
+}
