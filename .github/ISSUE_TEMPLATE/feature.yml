@@ -1,0 +1,40 @@
+name: Feature Request
+description: New feature or enhancement
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Owning Agent
+      options:
+        - rules-engine
+        - vtt-frontend
+        - backend-realtime
+        - character-sheet
+        - content-data
+        - dm-tools
+        - qa-playtester
+        - orchestrator
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be built?
+      placeholder: Describe the feature clearly
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: D&D Rule Reference (if applicable)
+      placeholder: PHB 2024 p.X / SRD section

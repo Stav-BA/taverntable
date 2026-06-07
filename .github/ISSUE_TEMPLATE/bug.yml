@@ -1,0 +1,41 @@
+name: Bug Report
+description: Something is broken or a rule is implemented incorrectly
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Affected Agent
+      options:
+        - rules-engine
+        - vtt-frontend
+        - backend-realtime
+        - character-sheet
+        - content-data
+        - dm-tools
+        - qa-playtester
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: rule
+    attributes:
+      label: Correct Rule Reference
+      placeholder: PHB 2024 p.X says... / SRD states...
