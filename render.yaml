@@ -41,7 +41,7 @@ services:
   - type: web
     name: taverntable-frontend
     runtime: static
-    buildCommand: npm install -g pnpm@9 && pnpm install && pnpm --filter @taverntable/dnd-rules build && pnpm --filter @taverntable/frontend build
+    buildCommand: npm install -g pnpm@9 && pnpm install && pnpm --filter @taverntable/dnd-rules run build --if-present && pnpm --filter @taverntable/frontend build
     envVars:
       - key: VITE_BACKEND_URL
         value: https://taverntable-backend.onrender.com
