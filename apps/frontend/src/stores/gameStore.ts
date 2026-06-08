@@ -191,7 +191,11 @@ export const useGameStore = create<GameState>()(
         tokens: state.tokens.map((t) => (t.id === id ? { ...t, ...updates } : t)),
       })),
     addToken: (token) =>
-      set((state) => ({ tokens: [...state.tokens, token] })),
+      set((state) => ({
+        tokens: state.tokens.some((t) => t.id === token.id)
+          ? state.tokens
+          : [...state.tokens, token],
+      })),
     removeToken: (id) =>
       set((state) => ({ tokens: state.tokens.filter((t) => t.id !== id) })),
     setFogRevealed: (areas) => set({ fogRevealed: areas }),

@@ -96,7 +96,7 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
 
   socket.on('session:join', async (payload: {
     code?: string;
-    sessionId?: string;   // may be Prisma CUID OR 'session-CODE' format
+    sessionId?: string;   // 'session-CODE' format from DMLobbyPage / JoinPage
     playerId?: string;    // frontend-generated client ID
     playerName?: string;
     isDM?: boolean;
@@ -109,55 +109,41 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
         return;
       }
 
-      // Resolve session: try direct ID first, then code lookup
-      let session = null;
+      // Use the sessionId directly as the Socket.io room key — no DB lookup required.
+      // Both DM (DMLobbyPage) and players (JoinPage) set sessionId = 'session-CODE',
+      // so they naturally land in the same room without Prisma.
+      const roomId = payload.sessionId ?? (payload.code ? `session-${payload.code.toUpperCase()}` : null);
 
-      // 1. Direct Prisma ID (CUID) — used on reconnect when sessionId is stored from session:create
-      if (payload.sessionId && !payload.sessionId.startsWith('session-')) {
-        session = await prisma.session.findUnique({ where: { id: payload.sessionId } });
-      }
-
-      // 2. session-CODE format (strip prefix, look up by code)
-      if (!session && payload.sessionId?.startsWith('session-')) {
-        const code = payload.sessionId.replace(/^session-/i, '').toUpperCase();
-        session = await prisma.session.findUnique({ where: { code } });
-      }
-
-      // 3. Explicit code field
-      if (!session && payload.code) {
-        session = await prisma.session.findUnique({ where: { code: payload.code.toUpperCase() } });
-      }
-
-      if (!session) {
-        socket.emit('error', { code: 'SESSION_NOT_FOUND', message: 'Session not found' });
+      if (!roomId) {
+        socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'sessionId or code is required' });
         return;
       }
 
-      // Use client-provided playerId if given, else create one
+      // Use client-provided playerId if given, else fall back to socket.id
       const playerId = payload.playerId || socket.id;
 
-      console.log(`[session:join] player="${playerName}" isDM=${payload.isDM} sessionId=${session.id} roomSize=${(await io.in(session.id).fetchSockets()).length}`);
+      console.log(`[session:join] player="${playerName}" isDM=${payload.isDM} room="${roomId}" socketId=${socket.id}`);
 
-      // Always get-or-init — never wipe state on reconnect (was clearing tokens/fog every DM reconnect)
-      const gameState = await getOrInitGameState(session.id);
+      // Get-or-init Redis game state for this room
+      const gameState = await getOrInitGameState(roomId);
 
-      await socket.join(session.id);
-      socketMeta._sessionId = session.id;
+      await socket.join(roomId);
+      socketMeta._sessionId = roomId;
       socketMeta._playerId = playerId;
 
       // Track this player in the in-memory room registry
       const playerEntry = { id: playerId, name: playerName, colour: payload.colour ?? '#4169E1' };
-      getRoomPlayers(session.id).set(playerId, playerEntry);
+      getRoomPlayers(roomId).set(playerId, playerEntry);
 
-      // Notify ALL others in the room that a new player joined (shape matches PlayerInfo on frontend)
-      socket.to(session.id).emit('player:joined', playerEntry);
+      // Notify ALL others in the room that a new player joined
+      socket.to(roomId).emit('player:joined', playerEntry);
 
       // Broadcast updated players list to ALL in the room (so DM Players tab refreshes)
-      const playersList = roomPlayersList(session.id);
-      console.log(`[session:join] broadcasting players:list to room ${session.id}:`, playersList.map(p => p.name));
-      io.to(session.id).emit('players:list', playersList);
+      const playersList = roomPlayersList(roomId);
+      console.log(`[session:join] broadcasting players:list to room "${roomId}":`, playersList.map(p => p.name));
+      io.to(roomId).emit('players:list', playersList);
 
-      // Build game:state response matching frontend useSocket.ts expectations
+      // Build game:state response
       const fogRevealed = (gameState?.fog?.revealed ?? []) as Array<{
         id?: string; type: string; cx?: number; cy?: number; radius?: number;
         x?: number; y?: number; width?: number; height?: number;
@@ -170,15 +156,13 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
         initiative: [],
         currentTurnIndex: gameState?.currentTurn ?? 0,
         inCombat: false,
-        // Send mapId so frontend can resolve → MapConfig from its availableMaps list
         mapId: gameState?.mapId ?? null,
         currentMap: null,
-        // Include current connected players so the joining player sees who's already in the room
-        connectedPlayers: roomPlayersList(session.id),
+        connectedPlayers: roomPlayersList(roomId),
       };
 
       if (typeof ack === 'function') {
-        ack({ sessionId: session.id, playerId, ...responseState });
+        ack({ sessionId: roomId, playerId, ...responseState });
       } else {
         socket.emit('game:state', responseState);
       }
