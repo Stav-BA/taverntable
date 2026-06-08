@@ -9,70 +9,25 @@ import { FogCanvas } from './FogCanvas';
 import type { Application } from 'pixi.js';
 import type { RevealedArea, MapConfig } from '@/stores/gameStore';
 
-// ── Map background styles ──────────────────────────────────────────────────
-function getMapStyle(map: MapConfig | null): React.CSSProperties {
-  if (!map) return { background: '#1a0f00' };
-
+// ── Map SVG file resolution ────────────────────────────────────────────────
+function getMapImageUrl(map: MapConfig | null): string | null {
+  if (!map) return null;
   const id = map.id ?? '';
-  const gridPx = map.gridSizePx ?? 70;
+  if (id.includes('tavern') || id.includes('inn')) return '/maps/tavern-interior.svg';
+  if (id.includes('dungeon') || id.includes('cave')) return '/maps/dungeon-entrance.svg';
+  if (id.includes('forest') || id.includes('outdoor')) return '/maps/forest-clearing.svg';
+  // If the map has a custom imageUrl, use it
+  if ((map as { imageUrl?: string }).imageUrl) return (map as { imageUrl?: string }).imageUrl!;
+  return null;
+}
 
-  if (id.includes('tavern') || id.includes('inn')) {
-    // Warm oak wood planks — horizontal lines every gridSizePx
-    return {
-      background: '#a0692a',
-      backgroundImage: [
-        // Alternating plank shades
-        `repeating-linear-gradient(
-          180deg,
-          rgba(0,0,0,0) 0px,
-          rgba(0,0,0,0) ${gridPx - 3}px,
-          rgba(0,0,0,0.25) ${gridPx - 3}px,
-          rgba(0,0,0,0.25) ${gridPx}px
-        )`,
-        // Subtle grain
-        `repeating-linear-gradient(
-          92deg,
-          rgba(255,255,255,0) 0px,
-          rgba(255,255,255,0.03) 4px,
-          rgba(255,255,255,0) 8px
-        )`,
-      ].join(', '),
-    };
-  }
-
-  if (id.includes('dungeon') || id.includes('cave')) {
-    // Gray stone blocks — grid seams
-    return {
-      background: '#707080',
-      backgroundImage: [
-        `repeating-linear-gradient(
-          0deg,
-          rgba(0,0,0,0.3) 0px,
-          rgba(0,0,0,0.3) 2px,
-          transparent 2px,
-          transparent ${gridPx}px
-        )`,
-        `repeating-linear-gradient(
-          90deg,
-          rgba(0,0,0,0.3) 0px,
-          rgba(0,0,0,0.3) 2px,
-          transparent 2px,
-          transparent ${gridPx}px
-        )`,
-      ].join(', '),
-    };
-  }
-
-  if (id.includes('forest') || id.includes('outdoor')) {
-    // Bright grass green with subtle variation
-    return {
-      background: '#4a8f2a',
-      backgroundImage:
-        `radial-gradient(ellipse 80% 60% at 30% 40%, rgba(90,160,50,0.5) 0%, transparent 60%),
-         radial-gradient(ellipse 60% 80% at 70% 70%, rgba(38,100,18,0.4) 0%, transparent 50%)`,
-    };
-  }
-
+// ── Fallback CSS background (used when no SVG is available) ───────────────
+function getFallbackStyle(map: MapConfig | null): React.CSSProperties {
+  if (!map) return { background: '#1a0f00' };
+  const id = map.id ?? '';
+  if (id.includes('tavern') || id.includes('inn')) return { background: '#a0692a' };
+  if (id.includes('dungeon') || id.includes('cave')) return { background: '#707080' };
+  if (id.includes('forest') || id.includes('outdoor')) return { background: '#4a8f2a' };
   return { background: '#5a5060' };
 }
 
@@ -157,18 +112,34 @@ export default function CanvasContainer() {
     socketEmit.fogReveal(area as unknown as Record<string, unknown>);
   }, [addRevealedArea]);
 
-  const mapStyle = getMapStyle(currentMap);
+  const mapImageUrl = getMapImageUrl(currentMap);
+  const fallbackStyle = getFallbackStyle(currentMap);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
 
-      {/* Layer 1: CSS map background — always visible, no PixiJS involved */}
+      {/* Layer 1: Map background — SVG image if available, else CSS fallback */}
       <div style={{
         position: 'absolute',
         inset: 0,
-        ...mapStyle,
+        ...fallbackStyle,
         transition: 'background 0.4s ease',
-      }} />
+      }}>
+        {mapImageUrl && (
+          <img
+            src={mapImageUrl}
+            alt="battle map"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center',
+              display: 'block',
+            }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
+      </div>
 
       {/* Layer 2: PixiJS canvas — transparent bg, renders grid + tokens */}
       <canvas

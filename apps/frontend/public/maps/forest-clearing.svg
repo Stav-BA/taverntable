@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1000" width="1400" height="1000">
+  <defs>
+    <radialGradient id="clearingGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6ab835"/>
+      <stop offset="60%" stop-color="#5aa825"/>
+      <stop offset="100%" stop-color="#2d5a1b"/>
+    </radialGradient>
+    <radialGradient id="treeShadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1a3d0d" stop-opacity="0.8"/>
+      <stop offset="70%" stop-color="#1a3d0d" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#1a3d0d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="treeTop" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#4a8f22"/>
+      <stop offset="55%" stop-color="#3a7318"/>
+      <stop offset="100%" stop-color="#1e4a08"/>
+    </radialGradient>
+    <radialGradient id="treeTop2" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#3d7a1c"/>
+      <stop offset="55%" stop-color="#2d6010"/>
+      <stop offset="100%" stop-color="#1a3a06"/>
+    </radialGradient>
+    <radialGradient id="stream" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#88ccff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#4488cc" stop-opacity="0.6"/>
+    </radialGradient>
+    <pattern id="grid" x="0" y="0" width="70" height="70" patternUnits="userSpaceOnUse">
+      <path d="M 70 0 L 0 0 0 70" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+    </pattern>
+    <pattern id="grass" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="#2d5a1b"/>
+      <line x1="5" y1="20" x2="3" y2="12" stroke="#3a6e22" stroke-width="1" opacity="0.6"/>
+      <line x1="10" y1="20" x2="12" y2="11" stroke="#3a6e22" stroke-width="1" opacity="0.6"/>
+      <line x1="16" y1="20" x2="14" y2="13" stroke="#3a6e22" stroke-width="1" opacity="0.6"/>
+    </pattern>
+  </defs>
+
+  <!-- Forest floor (dark) -->
+  <rect width="1400" height="1000" fill="url(#grass)"/>
+
+  <!-- Dense tree canopy borders — top -->
+  <ellipse cx="100" cy="60" rx="120" ry="110" fill="url(#treeTop)"/>
+  <ellipse cx="100" cy="60" rx="85" ry="78" fill="#3a7318"/>
+  <ellipse cx="250" cy="40" rx="130" ry="100" fill="url(#treeTop2)"/>
+  <ellipse cx="250" cy="40" rx="95" ry="70" fill="#2d6010"/>
+  <ellipse cx="420" cy="30" rx="110" ry="90" fill="url(#treeTop)"/>
+  <ellipse cx="420" cy="30" rx="80" ry="65" fill="#3a7318"/>
+  <ellipse cx="590" cy="50" rx="100" ry="80" fill="url(#treeTop2)"/>
+  <ellipse cx="750" cy="20" rx="120" ry="90" fill="url(#treeTop)"/>
+  <ellipse cx="920" cy="45" rx="110" ry="85" fill="url(#treeTop2)"/>
+  <ellipse cx="1080" cy="30" rx="130" ry="95" fill="url(#treeTop)"/>
+  <ellipse cx="1250" cy="50" rx="120" ry="90" fill="url(#treeTop2)"/>
+  <ellipse cx="1380" cy="40" rx="110" ry="100" fill="url(#treeTop)"/>
+
+  <!-- Dense tree canopy — bottom -->
+  <ellipse cx="80" cy="960" rx="120" ry="110" fill="url(#treeTop2)"/>
+  <ellipse cx="240" cy="980" rx="130" ry="100" fill="url(#treeTop)"/>
+  <ellipse cx="410" cy="970" rx="110" ry="90" fill="url(#treeTop2)"/>
+  <ellipse cx="580" cy="990" rx="100" ry="80" fill="url(#treeTop)"/>
+  <ellipse cx="750" cy="975" rx="120" ry="95" fill="url(#treeTop2)"/>
+  <ellipse cx="920" cy="985" rx="110" ry="85" fill="url(#treeTop)"/>
+  <ellipse cx="1090" cy="970" rx="130" ry="100" fill="url(#treeTop2)"/>
+  <ellipse cx="1260" cy="960" rx="120" ry="110" fill="url(#treeTop)"/>
+  <ellipse cx="1390" cy="975" rx="110" ry="90" fill="url(#treeTop2)"/>
+
+  <!-- Dense tree canopy — left -->
+  <ellipse cx="40" cy="200" rx="100" ry="120" fill="url(#treeTop)"/>
+  <ellipse cx="40" cy="200" rx="70" ry="90" fill="#2d6010"/>
+  <ellipse cx="30" cy="380" rx="110" ry="120" fill="url(#treeTop2)"/>
+  <ellipse cx="50" cy="560" rx="100" ry="110" fill="url(#treeTop)"/>
+  <ellipse cx="30" cy="740" rx="110" ry="120" fill="url(#treeTop2)"/>
+  <ellipse cx="40" cy="900" rx="100" ry="110" fill="url(#treeTop)"/>
+
+  <!-- Dense tree canopy — right -->
+  <ellipse cx="1360" cy="200" rx="100" ry="120" fill="url(#treeTop2)"/>
+  <ellipse cx="1370" cy="380" rx="110" ry="120" fill="url(#treeTop)"/>
+  <ellipse cx="1360" cy="560" rx="100" ry="110" fill="url(#treeTop2)"/>
+  <ellipse cx="1370" cy="740" rx="110" ry="120" fill="url(#treeTop)"/>
+  <ellipse cx="1360" cy="900" rx="100" ry="110" fill="url(#treeTop2)"/>
+
+  <!-- Clearing (bright center) -->
+  <ellipse cx="700" cy="500" rx="420" ry="320" fill="url(#clearingGrad)"/>
+  <!-- Clearing inner bright patch -->
+  <ellipse cx="680" cy="490" rx="300" ry="230" fill="#5aa825" opacity="0.6"/>
+
+  <!-- Dirt path (winding from top to bottom) -->
+  <path d="M 680 80 C 660 180 720 250 700 360 C 680 450 740 520 720 630 C 700 730 660 810 680 930"
+        fill="none" stroke="#8b6914" stroke-width="38" stroke-linecap="round"/>
+  <path d="M 680 80 C 660 180 720 250 700 360 C 680 450 740 520 720 630 C 700 730 660 810 680 930"
+        fill="none" stroke="#a07820" stroke-width="26" stroke-linecap="round" opacity="0.7"/>
+  <!-- Path pebbles -->
+  <circle cx="690" cy="200" r="4" fill="#7a6010"/>
+  <circle cx="705" cy="300" r="3" fill="#8a7020"/>
+  <circle cx="695" cy="450" r="4" fill="#7a6010"/>
+  <circle cx="715" cy="570" r="3" fill="#8a7020"/>
+  <circle cx="705" cy="700" r="4" fill="#7a6010"/>
+  <circle cx="685" cy="830" r="3" fill="#8a7020"/>
+
+  <!-- Stream (right side, winding) -->
+  <path d="M 1150 80 C 1130 200 1180 320 1160 440 C 1140 560 1200 660 1170 800 C 1150 880 1140 930 1160 1000"
+        fill="none" stroke="#4488cc" stroke-width="28" stroke-linecap="round" opacity="0.75"/>
+  <path d="M 1150 80 C 1130 200 1180 320 1160 440 C 1140 560 1200 660 1170 800 C 1150 880 1140 930 1160 1000"
+        fill="none" stroke="#88ccff" stroke-width="16" stroke-linecap="round" opacity="0.45"/>
+  <!-- Stream ripples -->
+  <ellipse cx="1155" cy="260" rx="10" ry="5" fill="none" stroke="#aaddff" stroke-width="1.5" opacity="0.5"/>
+  <ellipse cx="1162" cy="460" rx="10" ry="5" fill="none" stroke="#aaddff" stroke-width="1.5" opacity="0.5"/>
+  <ellipse cx="1175" cy="680" rx="10" ry="5" fill="none" stroke="#aaddff" stroke-width="1.5" opacity="0.5"/>
+  <!-- Stream bank stones -->
+  <ellipse cx="1125" cy="320" rx="16" ry="10" fill="#6a7060" opacity="0.7"/>
+  <ellipse cx="1185" cy="520" rx="14" ry="9" fill="#6a7060" opacity="0.7"/>
+  <ellipse cx="1140" cy="740" rx="16" ry="10" fill="#6a7060" opacity="0.7"/>
+
+  <!-- Mossy rocks in clearing -->
+  <ellipse cx="480" cy="420" rx="32" ry="22" fill="#5a6640" stroke="#3a4a28" stroke-width="2"/>
+  <ellipse cx="480" cy="412" rx="24" ry="14" fill="#6a7848" opacity="0.6"/>
+  <ellipse cx="870" cy="380" rx="28" ry="20" fill="#596040" stroke="#3a4a28" stroke-width="2"/>
+  <ellipse cx="870" cy="373" rx="20" ry="12" fill="#697248" opacity="0.6"/>
+  <ellipse cx="760" cy="680" rx="36" ry="24" fill="#5a6640" stroke="#3a4a28" stroke-width="2"/>
+  <ellipse cx="760" cy="670" rx="26" ry="16" fill="#6a7848" opacity="0.5"/>
+  <ellipse cx="560" cy="620" rx="22" ry="16" fill="#596040" stroke="#3a4a28" stroke-width="2"/>
+
+  <!-- Fallen log -->
+  <path d="M 480 560 Q 560 545 640 560 Q 680 565 700 555" fill="none" stroke="#6b3d1e" stroke-width="22" stroke-linecap="round"/>
+  <path d="M 480 560 Q 560 545 640 560 Q 680 565 700 555" fill="none" stroke="#8b5e2a" stroke-width="12" stroke-linecap="round" opacity="0.6"/>
+  <!-- Log rings at end -->
+  <ellipse cx="480" cy="560" rx="12" ry="14" fill="#5c3010" stroke="#4a2808" stroke-width="2"/>
+  <ellipse cx="480" cy="560" rx="7" ry="9" fill="#8b5e2a" opacity="0.5"/>
+  <!-- Mushrooms on log -->
+  <circle cx="540" cy="549" r="7" fill="#cc8844"/>
+  <ellipse cx="540" cy="554" rx="10" ry="5" fill="#dd9955"/>
+  <circle cx="570" cy="547" r="5" fill="#cc8844"/>
+  <ellipse cx="570" cy="551" rx="7" ry="3.5" fill="#dd9955"/>
+
+  <!-- Wildflowers in clearing -->
+  <circle cx="510" cy="340" r="5" fill="#ffee44"/>
+  <circle cx="525" cy="330" r="4" fill="#ffee44"/>
+  <circle cx="540" cy="345" r="5" fill="#ff88aa"/>
+  <circle cx="550" cy="330" r="4" fill="#ffee44"/>
+  <circle cx="835" cy="430" r="5" fill="#ff88aa"/>
+  <circle cx="850" cy="420" r="4" fill="#ffee44"/>
+  <circle cx="865" cy="435" r="5" fill="#ff88aa"/>
+  <circle cx="620" cy="660" r="5" fill="#ffee44"/>
+  <circle cx="635" cy="648" r="4" fill="#ff88aa"/>
+  <circle cx="650" cy="662" r="5" fill="#ffee44"/>
+  <circle cx="780" cy="310" r="4" fill="#ffee44"/>
+  <circle cx="795" cy="298" r="5" fill="#ff88aa"/>
+  <circle cx="810" cy="314" r="4" fill="#ffee44"/>
+  <circle cx="900" cy="600" r="5" fill="#ff88aa"/>
+  <circle cx="915" cy="590" r="4" fill="#ffee44"/>
+  <circle cx="460" cy="500" r="5" fill="#ffee44"/>
+  <circle cx="445" cy="490" r="4" fill="#ff88aa"/>
+
+  <!-- Flower stems -->
+  <line x1="510" y1="345" x2="510" y2="358" stroke="#4a8a1e" stroke-width="1.5"/>
+  <line x1="540" y1="350" x2="540" y2="363" stroke="#4a8a1e" stroke-width="1.5"/>
+  <line x1="835" y1="435" x2="835" y2="448" stroke="#4a8a1e" stroke-width="1.5"/>
+  <line x1="865" y1="440" x2="865" y2="453" stroke="#4a8a1e" stroke-width="1.5"/>
+
+  <!-- Tree root details near tree edges -->
+  <path d="M 160 140 Q 200 180 160 220" fill="none" stroke="#1a3d0d" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 140 160 Q 190 160 170 200" fill="none" stroke="#1a3d0d" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  <path d="M 1240 140 Q 1200 180 1240 220" fill="none" stroke="#1a3d0d" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 1260 160 Q 1210 160 1230 200" fill="none" stroke="#1a3d0d" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Tree shadows -->
+  <ellipse cx="100" cy="160" rx="90" ry="60" fill="url(#treeShadow)" opacity="0.5"/>
+  <ellipse cx="1300" cy="160" rx="90" ry="60" fill="url(#treeShadow)" opacity="0.5"/>
+  <ellipse cx="100" cy="850" rx="90" ry="60" fill="url(#treeShadow)" opacity="0.5"/>
+  <ellipse cx="1300" cy="850" rx="90" ry="60" fill="url(#treeShadow)" opacity="0.5"/>
+
+  <!-- Small campfire remnants -->
+  <circle cx="700" cy="500" r="12" fill="#4a3010" stroke="#3a2008" stroke-width="2"/>
+  <ellipse cx="700" cy="500" rx="20" ry="10" fill="none" stroke="#3a2008" stroke-width="1.5" opacity="0.7"/>
+  <line x1="694" y1="490" x2="690" y2="474" stroke="#8b6020" stroke-width="3" stroke-linecap="round"/>
+  <line x1="700" y1="488" x2="700" y2="472" stroke="#6b4010" stroke-width="3" stroke-linecap="round"/>
+  <line x1="706" y1="490" x2="710" y2="474" stroke="#8b6020" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Grid overlay -->
+  <rect width="1400" height="1000" fill="url(#grid)"/>
+
+  <!-- Room label -->
+  <text x="700" y="495" fill="rgba(255,240,180,0.2)" font-size="44" font-family="serif" text-anchor="middle" font-style="italic">Forest Clearing</text>
+</svg>
