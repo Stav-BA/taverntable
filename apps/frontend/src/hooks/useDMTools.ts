@@ -1,16 +1,7 @@
 import { useEffect } from 'react';
 import { useDMStore, AIDMMessage } from '@/stores/dmStore';
 import { useSessionStore } from '@/stores/sessionStore';
-import { io } from 'socket.io-client';
-
-// Lazily get the shared socket instance
-let _socket: ReturnType<typeof io> | null = null;
-function getSocket() {
-  if (!_socket) {
-    _socket = io(process.env.NEXT_PUBLIC_SOCKET_URL ?? 'http://localhost:3001');
-  }
-  return _socket;
-}
+import { getSocket } from '@/lib/socket';
 
 export function useDMTools() {
   const isDM = useSessionStore((s) => s.isDM);
@@ -80,18 +71,15 @@ export function useDMTools() {
   };
 
   const npcSpeak = (npcId: string, playerInput: string) => {
-    const socket = getSocket();
-    socket.emit('dm:npc-speak', { npcId, playerInput });
+    getSocket().emit('dm:npc-speak', { npcId, playerInput });
   };
 
   const sceneEnter = (scene: string) => {
-    const socket = getSocket();
-    socket.emit('dm:scene-enter', { scene });
+    getSocket().emit('dm:scene-enter', { scene });
   };
 
   const setTone = (tone: string) => {
-    const socket = getSocket();
-    socket.emit('dm:set-tone', { tone });
+    getSocket().emit('dm:set-tone', { tone });
   };
 
   return { narrate, npcSpeak, sceneEnter, setTone };
