@@ -58,6 +58,7 @@ export function FogCanvas({ areas, isDM, fogEnabled, fogToolActive, brushRadius 
 
     ctx.fillStyle = `rgba(0,0,0,${fogAlpha})`;
     ctx.fill('evenodd');
+    console.log('[FogCanvas] drew fog areas=', areas.length, 'alpha=', fogAlpha);
   }, [areas, isDM, fogEnabled]);
 
   // Redraw whenever deps change
@@ -87,6 +88,7 @@ export function FogCanvas({ areas, isDM, fogEnabled, fogToolActive, brushRadius 
 
   // ── DM brush pointer handlers ─────────────────────────────────────────────
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    console.log('[FogCanvas] pointerDown fogToolActive=', fogToolActive);
     if (!fogToolActive) return;
     isDrawingRef.current = true;
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
@@ -97,13 +99,15 @@ export function FogCanvas({ areas, isDM, fogEnabled, fogToolActive, brushRadius 
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    onReveal({
+    const area = {
       id: `brush-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      type: 'circle',
+      type: 'circle' as const,
       cx: e.clientX - rect.left,
       cy: e.clientY - rect.top,
       radius: brushRadius,
-    });
+    };
+    console.log('[FogCanvas] reveal circle at', area.cx.toFixed(0), area.cy.toFixed(0));
+    onReveal(area);
   }, [fogToolActive, brushRadius, onReveal]);
 
   const handlePointerUp = useCallback(() => {
