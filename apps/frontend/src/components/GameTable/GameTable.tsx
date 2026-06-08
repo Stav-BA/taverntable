@@ -1,18 +1,50 @@
-import { useRef, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import LeftSidebar from './LeftSidebar';
 import RightSidebar from './RightSidebar';
 import Toolbar from '@/components/Toolbar/Toolbar';
 import DiceRoller from '@/components/DiceRoller/DiceRoller';
 import AudioPlayer from '@/components/AudioPlayer/AudioPlayer';
 import CanvasContainer from '@/canvas/CanvasContainer';
+import CharacterCreationModal from '@/components/CharacterCreationModal';
 import { useSessionStore } from '@/stores/sessionStore';
+import { useGameStore } from '@/stores/gameStore';
+import { socketEmit } from '@/lib/socket';
 import { useNavigate } from 'react-router-dom';
 
 export default function GameTable() {
   const isDM = useSessionStore((s) => s.isDM);
   const player = useSessionStore((s) => s.player);
   const clearSession = useSessionStore((s) => s.clearSession);
+  const tokens = useGameStore((s) => s.tokens);
+  const currentMap = useGameStore((s) => s.currentMap);
   const navigate = useNavigate();
+
+  // Reset game state on mount
+  useEffect(() => {
+    const gs = useGameStore.getState();
+    gs.setFogRevealed([]);
+    gs.setTokens([]);
+    gs.setInCombat(false);
+    gs.setFogEnabled(false);
+  }, []);
+
+  // Load default map immediately if none is set
+  useEffect(() => {
+    if (currentMap) return;
+    const { availableMaps, setCurrentMap } = useGameStore.getState();
+    const defaultMap = availableMaps[0];
+    if (defaultMap) {
+      setCurrentMap(defaultMap);
+      if (isDM) {
+        socketEmit.mapChange(defaultMap.id, defaultMap as unknown as Record<string, unknown>);
+      }
+    }
+  }, [currentMap, isDM]);
+
+  // Show character creation modal for players who haven't created a token yet
+  const playerToken = player ? tokens.find((t) => t.playerId === player.id) : undefined;
+  const [characterCreated, setCharacterCreated] = useState(false);
+  const showCharacterCreation = !isDM && !!player && !playerToken && !characterCreated;
 
   const handleLeave = () => {
     clearSession();
@@ -73,8 +105,6 @@ export default function GameTable() {
         {/* Canvas — fills remaining width */}
         <div style={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
           <CanvasContainer />
-
-          {/* DM fog brush controls (shown when fog tools active) */}
           <FogBrushControls />
         </div>
 
@@ -89,6 +119,11 @@ export default function GameTable() {
 
       {/* Floating audio player (DM only) */}
       <AudioPlayer />
+
+      {/* Character creation modal — shown to new players before they have a token */}
+      {showCharacterCreation && (
+        <CharacterCreationModal onComplete={() => setCharacterCreated(true)} />
+      )}
     </div>
   );
 }
