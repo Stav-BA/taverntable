@@ -26,21 +26,26 @@ export class MapRenderer {
     this.mapSprite = null;
     this.mapGraphics = null;
 
-    // Try loading the actual image; if it fails (404) fall back to a procedural map
+    // Draw procedural map immediately (synchronous) so the canvas is never blank.
+    // Then attempt to load the real image in the background; if it arrives, swap it in.
+    const gfx = this.buildProceduralMap(config);
+    this.container.addChild(gfx);
+    this.mapGraphics = gfx;
+    this.loadedMapId = config.id;
+
+    // Background image load — optional upgrade if the file exists
     try {
       const texture = await Assets.load(config.imageUrl);
+      if (this.loadedMapId !== config.id) return; // map changed while loading
+      this.container.removeChildren();
       const sprite = new Sprite(texture);
       this.fitToStage(sprite, config);
       this.container.addChild(sprite);
       this.mapSprite = sprite;
+      this.mapGraphics = null;
     } catch {
-      // Image not found — draw a themed procedural map so the canvas isn't empty
-      const gfx = this.buildProceduralMap(config);
-      this.container.addChild(gfx);
-      this.mapGraphics = gfx;
+      // No image file — keep the procedural map already drawn
     }
-
-    this.loadedMapId = config.id;
   }
 
   /** Call this after a resize event to redraw the procedural map at the new size */

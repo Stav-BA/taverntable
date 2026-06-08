@@ -19,6 +19,14 @@ export default function GameTable() {
   const currentMap = useGameStore((s) => s.currentMap);
   const navigate = useNavigate();
 
+  // Clear any game state left over from a previous session on mount
+  useEffect(() => {
+    const gs = useGameStore.getState();
+    gs.setFogRevealed([]);
+    gs.setTokens([]);
+    gs.setInCombat(false);
+  }, []);
+
   // DM: auto-load the first available map if none is set yet
   // (runs once after socket connects and game:state is received)
   const [dmMapSynced, setDmMapSynced] = useState(false);
