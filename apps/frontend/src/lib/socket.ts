@@ -2,9 +2,19 @@ import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
+function getBackendUrl(): string {
+  // Explicit env var wins (works locally and when set in Render dashboard)
+  if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
+  // Auto-detect: if running on Render, derive backend URL from frontend hostname
+  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+    return 'https://taverntable-backend.onrender.com';
+  }
+  return 'http://localhost:3001';
+}
+
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001', {
+    socket = io(getBackendUrl(), {
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: Infinity,
