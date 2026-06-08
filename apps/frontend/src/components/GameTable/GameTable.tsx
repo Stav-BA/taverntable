@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import LeftSidebar from './LeftSidebar';
 import RightSidebar from './RightSidebar';
 import Toolbar from '@/components/Toolbar/Toolbar';
@@ -19,16 +19,16 @@ export default function GameTable() {
   const currentMap = useGameStore((s) => s.currentMap);
   const navigate = useNavigate();
 
-  // Clear any game state left over from a previous session on mount
+  // Reset game state on mount
   useEffect(() => {
     const gs = useGameStore.getState();
     gs.setFogRevealed([]);
     gs.setTokens([]);
     gs.setInCombat(false);
-    gs.setFogEnabled(false);  // always start with fog OFF
+    gs.setFogEnabled(false);
   }, []);
 
-  // Auto-load the first available map immediately for everyone if none is set
+  // Load default map immediately if none is set
   useEffect(() => {
     if (currentMap) return;
     const { availableMaps, setCurrentMap } = useGameStore.getState();
@@ -105,8 +105,6 @@ export default function GameTable() {
         {/* Canvas — fills remaining width */}
         <div style={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
           <CanvasContainer />
-
-          {/* DM fog brush controls (shown when fog tools active) */}
           <FogBrushControls />
         </div>
 
@@ -122,9 +120,9 @@ export default function GameTable() {
       {/* Floating audio player (DM only) */}
       <AudioPlayer />
 
-      {/* Character creation modal — shown to players who don't have a token */}
+      {/* Character creation modal — shown to new players before they have a token */}
       {showCharacterCreation && (
-        <CharacterCreationModal onClose={() => setCharacterCreated(true)} />
+        <CharacterCreationModal onComplete={() => setCharacterCreated(true)} />
       )}
     </div>
   );
