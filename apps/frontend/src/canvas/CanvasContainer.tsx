@@ -6,7 +6,7 @@ import { createPixiApp, destroyPixiApp } from './PixiApp';
 import { MapRenderer } from './MapRenderer';
 import { GridSystem } from './GridSystem';
 import { TokenManager } from './TokenManager';
-import { FogOfWar } from './FogOfWar';
+import { FogCanvas } from './FogCanvas';
 import type { Application } from 'pixi.js';
 import type { RevealedArea } from '@/stores/gameStore';
 
@@ -16,7 +16,6 @@ export default function CanvasContainer() {
   const mapRendererRef = useRef<MapRenderer | null>(null);
   const gridRef = useRef<GridSystem | null>(null);
   const tokenManagerRef = useRef<TokenManager | null>(null);
-  const fogRef = useRef<FogOfWar | null>(null);
   const [ready, setReady] = useState(false);
 
   const currentMap = useGameStore((s) => s.currentMap);
@@ -29,7 +28,9 @@ export default function CanvasContainer() {
   const isDM = useSessionStore((s) => s.isDM);
   const activeTool = useSessionStore((s) => s.activeTool);
 
-  // Initialise PixiJS
+  const fogToolActive = isDM && (activeTool === 'fog-reveal' || activeTool === 'fog-hide');
+
+  // Initialise PixiJS (map + grid + tokens only — fog is now a React canvas overlay)
   useEffect(() => {
     if (!canvasRef.current) return;
 
@@ -42,22 +43,13 @@ export default function CanvasContainer() {
       appRef.current = app;
       app.stage.eventMode = 'static';
 
-      // Layers in Z order: map → grid → fog → tokens
+      // Layers in Z order: map → grid → tokens
       const mapRenderer = new MapRenderer(app);
       mapRendererRef.current = mapRenderer;
 
       const grid = new GridSystem(app);
       grid.attachToStage(1);
       gridRef.current = grid;
-
-      const handleReveal = (area: RevealedArea) => {
-        addRevealedArea(area);
-        socketEmit.fogReveal(area as unknown as Record<string, unknown>);
-      };
-
-      const fog = new FogOfWar(app, handleReveal);
-      fog.attachToStage(2);
-      fogRef.current = fog;
 
       const tokenManager = new TokenManager(
         app,
@@ -69,7 +61,7 @@ export default function CanvasContainer() {
           useSessionStore.getState().setSelectedTokenId(tokenId);
         }
       );
-      tokenManager.attachToStage(3);
+      tokenManager.attachToStage(2);
       tokenManagerRef.current = tokenManager;
 
       setReady(true);
@@ -84,7 +76,6 @@ export default function CanvasContainer() {
       mapRendererRef.current = null;
       gridRef.current = null;
       tokenManagerRef.current = null;
-      fogRef.current = null;
       setReady(false);
     };
   }, []);
@@ -95,8 +86,7 @@ export default function CanvasContainer() {
     mapRendererRef.current.loadMap(currentMap);
     gridRef.current.drawGrid(currentMap);
 
-    // PixiJS may not have its final size on the very first render tick.
-    // Redraw the procedural map after a short delay to guarantee correct dimensions.
+    // Redraw procedural map after a frame so PixiJS has its final canvas size
     const t = setTimeout(() => {
       mapRendererRef.current?.redrawIfProcedural(currentMap);
       gridRef.current?.drawGrid(currentMap);
@@ -110,29 +100,30 @@ export default function CanvasContainer() {
     tokenManagerRef.current.syncTokens(tokens, currentMap, player.id, isDM);
   }, [ready, tokens, currentMap, player, isDM]);
 
-  // Fog sync
-  useEffect(() => {
-    if (!ready || !fogRef.current || !currentMap) return;
-    fogRef.current.setEnabled(fogEnabled, isDM);
-    if (fogEnabled) {
-      fogRef.current.updateRevealed(fogRevealed, currentMap);
-    }
-  }, [ready, fogEnabled, fogRevealed, isDM, currentMap]);
-
-  // Fog tool active — only let the DM brush paint when fog-reveal/fog-hide is selected
-  useEffect(() => {
-    if (!ready || !fogRef.current) return;
-    const isFogTool = activeTool === 'fog-reveal' || activeTool === 'fog-hide';
-    fogRef.current.setFogToolActive(isDM && isFogTool);
-  }, [ready, activeTool, isDM]);
+  // Fog reveal handler (used by FogCanvas brush)
+  const handleReveal = useCallback((area: RevealedArea) => {
+    addRevealedArea(area);
+    socketEmit.fogReveal(area as unknown as Record<string, unknown>);
+  }, [addRevealedArea]);
 
   return (
-    <div className="canvas-wrapper w-full h-full relative">
+    <div className="canvas-wrapper w-full h-full relative" style={{ overflow: 'hidden' }}>
+      {/* PixiJS canvas — map, grid, tokens */}
       <canvas
         ref={canvasRef}
         id="pixi-canvas"
         style={{ display: 'block', width: '100%', height: '100%' }}
       />
+
+      {/* Fog overlay — native Canvas2D, guaranteed correct compositing */}
+      <FogCanvas
+        areas={fogRevealed}
+        isDM={isDM}
+        fogEnabled={fogEnabled}
+        fogToolActive={fogToolActive}
+        onReveal={handleReveal}
+      />
+
       {!ready && (
         <div
           className="absolute inset-0 flex items-center justify-center"
