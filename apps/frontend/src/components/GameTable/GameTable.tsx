@@ -28,24 +28,18 @@ export default function GameTable() {
     gs.setFogEnabled(false);  // always start with fog OFF
   }, []);
 
-  // DM: auto-load the first available map if none is set yet
-  // (runs once after socket connects and game:state is received)
-  const [dmMapSynced, setDmMapSynced] = useState(false);
+  // Auto-load the first available map immediately for everyone if none is set
   useEffect(() => {
-    if (!isDM || dmMapSynced || currentMap) return;
-    // Give socket ~2 s to receive game:state; if still no map, load the default
-    const timer = setTimeout(() => {
-      if (useGameStore.getState().currentMap) return; // already set
-      const { availableMaps, setCurrentMap } = useGameStore.getState();
-      const defaultMap = availableMaps[0];
-      if (defaultMap) {
-        setCurrentMap(defaultMap);
+    if (currentMap) return;
+    const { availableMaps, setCurrentMap } = useGameStore.getState();
+    const defaultMap = availableMaps[0];
+    if (defaultMap) {
+      setCurrentMap(defaultMap);
+      if (isDM) {
         socketEmit.mapChange(defaultMap.id, defaultMap as unknown as Record<string, unknown>);
       }
-      setDmMapSynced(true);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [isDM, dmMapSynced, currentMap]);
+    }
+  }, [currentMap, isDM]);
 
   // Show character creation modal for players who haven't created a token yet
   const playerToken = player ? tokens.find((t) => t.playerId === player.id) : undefined;
