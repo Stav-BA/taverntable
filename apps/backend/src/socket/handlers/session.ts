@@ -1,6 +1,20 @@
 import { Server, Socket } from 'socket.io';
 import { prisma } from '../../db/client';
-import { initGameState, getGameState, deleteGameState, getOrInitGameState } from '../../redis/sessionState';
+import { initGameState, getOrInitGameState } from '../../redis/sessionState';
+
+// In-memory map of sessionId → connected players (for rooms not persisted to DB)
+const roomPlayers = new Map<string, Map<string, { id: string; name: string; colour: string }>>();
+
+function getRoomPlayers(sessionId: string): Map<string, { id: string; name: string; colour: string }> {
+  if (!roomPlayers.has(sessionId)) {
+    roomPlayers.set(sessionId, new Map());
+  }
+  return roomPlayers.get(sessionId)!;
+}
+
+function roomPlayersList(sessionId: string): Array<{ id: string; name: string; colour: string }> {
+  return Array.from(getRoomPlayers(sessionId).values());
+}
 
 // Ambiguous chars excluded: 0, O, 1, I, L
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -64,6 +78,9 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
       socketMeta._sessionId = session.id;
       socketMeta._playerId = player.id;
 
+      // Register DM in in-memory room player registry
+      getRoomPlayers(session.id).set(player.id, { id: player.id, name: dmName, colour: '#f59e0b' });
+
       const result = { sessionId: session.id, code: session.code, playerId: player.id };
 
       if (typeof ack === 'function') {
@@ -119,12 +136,15 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
       socketMeta._sessionId = session.id;
       socketMeta._playerId = playerId;
 
-      // Notify others of the joining player
-      socket.to(session.id).emit('player:joined', {
-        playerId,
-        name: playerName,
-        colour: payload.colour ?? '#4169E1',
-      });
+      // Track this player in the in-memory room registry
+      const playerEntry = { id: playerId, name: playerName, colour: payload.colour ?? '#4169E1' };
+      getRoomPlayers(session.id).set(playerId, playerEntry);
+
+      // Notify ALL others in the room that a new player joined (shape matches PlayerInfo on frontend)
+      socket.to(session.id).emit('player:joined', playerEntry);
+
+      // Broadcast updated players list to ALL in the room (so DM Players tab refreshes)
+      io.to(session.id).emit('players:list', roomPlayersList(session.id));
 
       // Build game:state response matching frontend useSocket.ts expectations
       const fogRevealed = (gameState?.fog?.revealed ?? []) as Array<{
@@ -142,6 +162,8 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
         // Send mapId so frontend can resolve → MapConfig from its availableMaps list
         mapId: gameState?.mapId ?? null,
         currentMap: null,
+        // Include current connected players so the joining player sees who's already in the room
+        connectedPlayers: roomPlayersList(session.id),
       };
 
       if (typeof ack === 'function') {
@@ -162,12 +184,21 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
 
       if (!sessionId || !playerId) return;
 
-      await prisma.player.update({
-        where: { id: playerId },
-        data: { isConnected: false },
-      });
+      // Look up display name before removing from registry
+      const playerName = getRoomPlayers(sessionId).get(playerId)?.name ?? playerId;
 
-      socket.to(sessionId).emit('player:left', { playerId });
+      // Remove from in-memory room registry
+      getRoomPlayers(sessionId).delete(playerId);
+
+      // Best-effort DB update — player row may not exist for client-generated IDs
+      try {
+        await prisma.player.update({ where: { id: playerId }, data: { isConnected: false } });
+      } catch {
+        // Non-DB player (client-generated ID) — safe to ignore
+      }
+
+      socket.to(sessionId).emit('player:left', { playerId, playerName });
+      io.to(sessionId).emit('players:list', roomPlayersList(sessionId));
       await socket.leave(sessionId);
 
       socketMeta._sessionId = undefined;
@@ -187,12 +218,21 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
 
       if (!sessionId || !playerId) return;
 
-      await prisma.player.update({
-        where: { id: playerId },
-        data: { isConnected: false },
-      });
+      // Look up display name before removing from registry
+      const playerName = getRoomPlayers(sessionId).get(playerId)?.name ?? playerId;
 
-      io.to(sessionId).emit('player:left', { playerId });
+      // Remove from in-memory room registry
+      getRoomPlayers(sessionId).delete(playerId);
+
+      // Best-effort DB update — player row may not exist for client-generated IDs
+      try {
+        await prisma.player.update({ where: { id: playerId }, data: { isConnected: false } });
+      } catch {
+        // Non-DB player (client-generated ID) — safe to ignore
+      }
+
+      io.to(sessionId).emit('player:left', { playerId, playerName });
+      io.to(sessionId).emit('players:list', roomPlayersList(sessionId));
     } catch (err) {
       console.error('[disconnect cleanup]', err);
     }
