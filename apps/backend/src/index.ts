@@ -13,15 +13,11 @@ import { redis } from './redis/client';
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
 
+// Track connection state for informational health reporting
+let dbReady = false;
+let redisReady = false;
+
 async function bootstrap(): Promise<void> {
-  // Verify DB connection
-  await prisma.$connect();
-  console.log('[Prisma] Connected to database');
-
-  // Verify Redis (already connects on import, just ping)
-  await redis.ping();
-  console.log('[Redis] Ping OK');
-
   const app = express();
 
   // Middleware
@@ -34,9 +30,14 @@ async function bootstrap(): Promise<void> {
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Health check
+  // Health check — responds immediately so Render never times out waiting for DB/Redis
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      db: dbReady ? 'connected' : 'connecting',
+      redis: redisReady ? 'connected' : 'connecting',
+    });
   });
 
   // API routes
@@ -54,10 +55,23 @@ async function bootstrap(): Promise<void> {
   const io = createSocketServer(httpServer);
   console.log('[Socket.io] Server attached');
 
-  httpServer.listen(PORT, () => {
-    console.log(`[Server] Listening on http://localhost:${PORT}`);
-    console.log(`[Server] Environment: ${process.env.NODE_ENV ?? 'development'}`);
+  // Bind to port FIRST — health check must respond before DB/Redis are ready
+  await new Promise<void>((resolve) => {
+    httpServer.listen(PORT, () => {
+      console.log(`[Server] Listening on http://localhost:${PORT}`);
+      console.log(`[Server] Environment: ${process.env.NODE_ENV ?? 'development'}`);
+      resolve();
+    });
   });
+
+  // Connect to DB and Redis in the background — non-blocking
+  prisma.$connect()
+    .then(() => { dbReady = true; console.log('[Prisma] Connected to database'); })
+    .catch((err) => console.error('[Prisma] DB connection error:', err.message));
+
+  redis.ping()
+    .then(() => { redisReady = true; console.log('[Redis] Ping OK'); })
+    .catch((err) => console.error('[Redis] Ping error:', err.message));
 
   // Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {
