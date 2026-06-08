@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>TavernTable</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f0d0b;
+      --surface: #1c1814;
+      --surface2: #26211a;
+      --border: #3d2e1e;
+      --gold: #c9a84c;
+      --gold-dim: #8a6f30;
+      --red: #c0392b;
+      --green: #27ae60;
+      --text: #e8dcc8;
+      --muted: #7a6a54;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Georgia', serif;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    /* ── SCREENS ── */
+    .screen { display: none; min-height: 100dvh; flex-direction: column; }
+    .screen.active { display: flex; }
+
+    /* ── LOBBY ── */
+    #lobby {
+      align-items: center;
+      justify-content: center;
+      padding: 24px 20px;
+      gap: 20px;
+      background: radial-gradient(ellipse at 50% 0%, #2a1a0a 0%, var(--bg) 60%);
+    }
+    .logo { text-align: center; }
+    .logo h1 {
+      font-size: 2.4rem;
+      color: var(--gold);
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(201,168,76,.4);
+    }
+    .logo p { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .card h2 { color: var(--gold); margin-bottom: 16px; font-size: 1.1rem; }
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+    .field input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 1rem;
+      outline: none;
+      font-family: inherit;
+    }
+    .field input:focus { border-color: var(--gold-dim); }
+    .field input.code-input {
+      font-size: 1.4rem;
+      text-align: center;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: filter .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--gold); color: #0f0d0b; font-weight: bold; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--gold-dim); }
+
+    .divider { text-align: center; color: var(--muted); font-size: .8rem; margin: 4px 0; }
+
+    /* ── GAME ROOM ── */
+    #game {
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .session-info { display: flex; flex-direction: column; }
+    .session-name { font-size: .95rem; color: var(--gold); font-weight: bold; }
+    .session-code { font-size: .75rem; color: var(--muted); letter-spacing: 2px; }
+    .players-pill {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: .75rem;
+      color: var(--muted);
+    }
+    .leave-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: .75rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px 4px;
+      text-align: center;
+      font-size: .8rem;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+    .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    .tab-content.active { display: flex; }
+
+    /* DICE TAB */
+    .dice-tab { padding: 16px; gap: 16px; overflow-y: auto; }
+    .dice-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .die-btn {
+      aspect-ratio: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: .85rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background .15s, border-color .15s, transform .1s;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px;
+    }
+    .die-btn .die-icon { font-size: 1.5rem; }
+    .die-btn:active { transform: scale(.93); background: var(--border); }
+    .die-btn.d20 { border-color: var(--gold-dim); background: #1e1a10; }
+    .die-btn.d20 .die-icon { filter: drop-shadow(0 0 6px rgba(201,168,76,.5)); }
+
+    .modifier-row {
+      display: flex; gap: 10px; align-items: center;
+    }
+    .modifier-row label { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+    .modifier-row input {
+      width: 70px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 1rem;
+      text-align: center;
+      outline: none;
+      font-family: inherit;
+    }
+    .adv-row { display: flex; gap: 8px; }
+    .adv-btn {
+      flex: 1;
+      padding: 9px;
+      border-radius: 8px;
+      font-size: .8rem;
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .adv-btn.active-adv { background: #1a2e1a; border-color: var(--green); color: var(--green); }
+    .adv-btn.active-dis { background: #2e1a1a; border-color: var(--red); color: var(--red); }
+
+    .roll-result {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+      min-height: 90px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    }
+    .roll-total { font-size: 3rem; color: var(--gold); font-weight: bold; line-height: 1; }
+    .roll-total.crit { color: #ffd700; text-shadow: 0 0 12px gold; }
+    .roll-total.fumble { color: var(--red); }
+    .roll-breakdown { font-size: .8rem; color: var(--muted); }
+    .roll-notation { font-size: .85rem; color: var(--text); }
+
+    /* CHAT TAB */
+    .chat-tab { flex: 1; overflow: hidden; }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .msg { display: flex; flex-direction: column; gap: 2px; }
+    .msg-header { display: flex; gap: 8px; align-items: baseline; }
+    .msg-name { font-size: .75rem; color: var(--gold); font-weight: bold; }
+    .msg-time { font-size: .7rem; color: var(--muted); }
+    .msg-text { font-size: .9rem; line-height: 1.4; }
+    .msg-text.roll-msg { color: #c8b560; font-style: italic; }
+    .msg-text.system { color: var(--muted); font-style: italic; font-size: .8rem; }
+
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .chat-input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: .95rem;
+      outline: none;
+      font-family: inherit;
+    }
+    .chat-input:focus { border-color: var(--gold-dim); }
+    .send-btn {
+      background: var(--gold);
+      border: none;
+      border-radius: 8px;
+      color: #0f0d0b;
+      padding: 10px 16px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    /* PLAYERS TAB */
+    .players-tab { padding: 16px; gap: 10px; overflow-y: auto; }
+    .player-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .player-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; font-weight: bold;
+      flex-shrink: 0;
+    }
+    .player-info { flex: 1; }
+    .player-name { font-size: .95rem; color: var(--text); }
+    .player-status { font-size: .75rem; color: var(--muted); }
+    .online-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+
+    /* TOAST */
+    .toast {
+      position: fixed;
+      bottom: 20px; left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: .9rem;
+      color: var(--text);
+      z-index: 999;
+      transition: transform .3s ease;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    .error-msg { color: var(--red); font-size: .8rem; margin-top: 6px; min-height: 18px; }
+
+    /* spinner */
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (min-width: 480px) {
+      .dice-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ LOBBY ═══════════════ -->
+<div id="lobby" class="screen active">
+  <div class="logo">
+    <h1>⚔ TavernTable</h1>
+    <p>D&D 5e Virtual Tabletop</p>
+  </div>
+
+  <div class="card" id="create-card">
+    <h2>⚗ Start a New Game</h2>
+    <div class="field">
+      <label>Session Name</label>
+      <input id="session-name" type="text" placeholder="The Dragon's Den" maxlength="40"/>
+    </div>
+    <div class="field">
+      <label>Your Name (DM)</label>
+      <input id="dm-name" type="text" placeholder="Dungeon Master" maxlength="30"/>
+    </div>
+    <p class="error-msg" id="create-error"></p>
+    <button class="btn btn-primary" onclick="createSession()">Create Game</button>
+  </div>
+
+  <div class="divider">— or —</div>
+
+  <div class="card" id="join-card">
+    <h2>🍺 Join a Game</h2>
+    <div class="field">
+      <label>Session Code</label>
+      <input id="join-code" class="field-input code-input" type="text" placeholder="ABC123" maxlength="6"/>
+    </div>
+    <div class="field">
+      <label>Your Name</label>
+      <input id="player-name" type="text" placeholder="Brave Adventurer" maxlength="30"/>
+    </div>
+    <p class="error-msg" id="join-error"></p>
+    <button class="btn btn-secondary" onclick="joinSession()">Join Game</button>
+  </div>
+</div>
+
+<!-- ═══════════════ GAME ROOM ═══════════════ -->
+<div id="game" class="screen">
+
+  <div class="topbar">
+    <div class="session-info">
+      <span class="session-name" id="room-name">—</span>
+      <span class="session-code">CODE: <b id="room-code">—</b></span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="players-pill" id="players-count">1 player</span>
+      <button class="leave-btn" onclick="leaveSession()">Leave</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="dice" onclick="switchTab('dice')">🎲 Dice</div>
+    <div class="tab" data-tab="chat" onclick="switchTab('chat')">💬 Chat</div>
+    <div class="tab" data-tab="players" onclick="switchTab('players')">⚔ Players</div>
+  </div>
+
+  <!-- DICE -->
+  <div class="tab-content active dice-tab" id="tab-dice">
+    <div class="dice-grid" id="dice-grid">
+      <button class="die-btn" onclick="roll(4)"><span class="die-icon">🔺</span><span>d4</span></button>
+      <button class="die-btn" onclick="roll(6)"><span class="die-icon">🎲</span><span>d6</span></button>
+      <button class="die-btn" onclick="roll(8)"><span class="die-icon">💎</span><span>d8</span></button>
+      <button class="die-btn" onclick="roll(10)"><span class="die-icon">🔷</span><span>d10</span></button>
+      <button class="die-btn" onclick="roll(12)"><span class="die-icon">⬡</span><span>d12</span></button>
+      <button class="die-btn d20" onclick="roll(20)"><span class="die-icon">🎯</span><span>d20</span></button>
+      <button class="die-btn" onclick="roll(100)"><span class="die-icon">💯</span><span>d100</span></button>
+      <button class="die-btn" onclick="rollCustom()"><span class="die-icon">⚙️</span><span>custom</span></button>
+    </div>
+
+    <div class="modifier-row">
+      <label>Modifier</label>
+      <input id="modifier" type="number" value="0" min="-20" max="20"/>
+      <div class="adv-row" style="flex:1;">
+        <button class="adv-btn" id="adv-btn" onclick="toggleAdv()">Advantage</button>
+        <button class="adv-btn" id="dis-btn" onclick="toggleDis()">Disadvantage</button>
+      </div>
+    </div>
+
+    <div class="roll-result" id="roll-result">
+      <span style="color:var(--muted);font-size:.9rem;">Tap a die to roll</span>
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="tab-content chat-tab" id="tab-chat">
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chat-input" type="text" placeholder="Say something…" maxlength="400"
+        onkeydown="if(event.key==='Enter') sendChat()"/>
+      <button class="send-btn" onclick="sendChat()">➤</button>
+    </div>
+  </div>
+
+  <!-- PLAYERS -->
+  <div class="tab-content players-tab" id="tab-players">
+    <div id="players-list"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const HOST = window.location.origin;
+let socket = null;
+let state = {
+  sessionId: null,
+  playerId: null,
+  playerName: null,
+  sessionName: null,
+  code: null,
+  players: {},
+  advMode: null, // null | 'adv' | 'dis'
+};
+
+// ── SOCKET ──────────────────────────────────────────────────────────────────
+function connect() {
+  socket = io(HOST, { transports: ['websocket', 'polling'] });
+
+  socket.on('connect', () => console.log('Socket connected:', socket.id));
+  socket.on('disconnect', () => addSystemMsg('Disconnected from server.'));
+
+  socket.on('session:created', ({ sessionId, code, playerId }) => {
+    state.sessionId = sessionId;
+    state.playerId = playerId;
+    state.code = code;
+    enterRoom();
+  });
+
+  socket.on('game:state', ({ sessionId, playerId, gameState }) => {
+    state.sessionId = sessionId;
+    state.playerId = playerId;
+    enterRoom();
+  });
+
+  socket.on('player:joined', ({ playerId, name }) => {
+    state.players[playerId] = { name, online: true };
+    updatePlayers();
+    addSystemMsg(`${name} joined the game.`);
+  });
+
+  socket.on('player:left', ({ playerId }) => {
+    const p = state.players[playerId];
+    if (p) {
+      p.online = false;
+      addSystemMsg(`${p.name} left the game.`);
+      updatePlayers();
+    }
+  });
+
+  socket.on('chat:message', (entry) => {
+    addChatMsg(entry.playerName, entry.text, entry.timestamp);
+  });
+
+  socket.on('dice:result', (res) => {
+    showRollResult(res);
+    addChatMsg(
+      state.players[res.playerId]?.name ?? res.playerId,
+      `🎲 rolled ${res.notation} → ${res.total}${res.breakdown ? ' [' + res.breakdown.dice.map(d => d.roll).join(', ') + ']' : ''}`,
+      Date.now(),
+      true
+    );
+  });
+
+  socket.on('error', ({ message }) => toast(message, true));
+}
+
+// ── SESSION ──────────────────────────────────────────────────────────────────
+function createSession() {
+  const name = document.getElementById('session-name').value.trim();
+  const dmName = document.getElementById('dm-name').value.trim();
+  const err = document.getElementById('create-error');
+
+  if (!name) { err.textContent = 'Session name is required.'; return; }
+  if (!dmName) { err.textContent = 'Your name is required.'; return; }
+  err.textContent = '';
+
+  if (!socket) connect();
+  state.playerName = dmName;
+  state.sessionName = name;
+  state.players[null] = { name: dmName, online: true }; // placeholder
+
+  socket.emit('session:create', { name, dmName }, (res) => {
+    if (res?.sessionId) {
+      state.sessionId = res.sessionId;
+      state.playerId = res.playerId;
+      state.code = res.code;
+      state.players = {};
+      state.players[res.playerId] = { name: dmName, online: true };
+      enterRoom();
+    }
+  });
+  socket.once('session:created', (res) => {
+    state.players = {};
+    state.players[res.playerId] = { name: dmName, online: true };
+  });
+}
+
+function joinSession() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  const playerName = document.getElementById('player-name').value.trim();
+  const err = document.getElementById('join-error');
+
+  if (code.length !== 6) { err.textContent = 'Enter a 6-character code.'; return; }
+  if (!playerName) { err.textContent = 'Your name is required.'; return; }
+  err.textContent = '';
+
+  if (!socket) connect();
+  state.playerName = playerName;
+
+  socket.emit('session:join', { code, playerName }, (res) => {
+    if (res?.sessionId) {
+      state.sessionId = res.sessionId;
+      state.playerId = res.playerId;
+      state.players = {};
+      state.players[res.playerId] = { name: playerName, online: true };
+      state.code = code;
+      state.sessionName = 'Game Room';
+      enterRoom();
+    }
+  });
+}
+
+function leaveSession() {
+  if (socket && state.sessionId) {
+    socket.emit('session:leave', {});
+  }
+  state = { sessionId: null, playerId: null, playerName: null, sessionName: null, code: null, players: {}, advMode: null };
+  showScreen('lobby');
+  resetRoll();
+  document.getElementById('chat-messages').innerHTML = '';
+}
+
+// ── ROOM ─────────────────────────────────────────────────────────────────────
+function enterRoom() {
+  document.getElementById('room-name').textContent = state.sessionName ?? 'Game';
+  document.getElementById('room-code').textContent = state.code ?? '—';
+  updatePlayers();
+  showScreen('game');
+  addSystemMsg('Welcome to ' + (state.sessionName ?? 'the game') + '! Share your code: ' + state.code);
+}
+
+function updatePlayers() {
+  const list = document.getElementById('players-list');
+  const onlinePlayers = Object.entries(state.players);
+  document.getElementById('players-count').textContent =
+    onlinePlayers.filter(([,p]) => p.online).length + ' player' + (onlinePlayers.filter(([,p]) => p.online).length !== 1 ? 's' : '');
+
+  list.innerHTML = onlinePlayers.map(([id, p]) => `
+    <div class="player-card">
+      <div class="player-avatar" style="background:${colorFromName(p.name)}22;color:${colorFromName(p.name)};">
+        ${p.name[0].toUpperCase()}
+      </div>
+      <div class="player-info">
+        <div class="player-name">${esc(p.name)}${id === state.playerId ? ' <span style="color:var(--muted);font-size:.7rem;">(you)</span>' : ''}</div>
+        <div class="player-status">${p.online ? 'Online' : 'Offline'}</div>
+      </div>
+      ${p.online ? '<div class="online-dot"></div>' : ''}
+    </div>
+  `).join('');
+}
+
+// ── DICE ─────────────────────────────────────────────────────────────────────
+function roll(sides) {
+  if (!state.sessionId) { toast('Join a session first'); return; }
+  const mod = parseInt(document.getElementById('modifier').value) || 0;
+  let notation = `1d${sides}${mod > 0 ? '+' + mod : mod < 0 ? mod : ''}`;
+
+  if (state.advMode && sides === 20) {
+    notation = state.advMode === 'adv' ? `2d20kh1${mod > 0 ? '+' + mod : mod < 0 ? mod : ''}` : `2d20kl1${mod > 0 ? '+' + mod : mod < 0 ? mod : ''}`;
+  }
+
+  socket.emit('dice:roll', { notation }, (res) => {
+    if (res) showRollResult({ ...res, playerId: state.playerId });
+  });
+}
+
+function rollCustom() {
+  const notation = prompt('Enter dice notation (e.g. 2d6+3):');
+  if (!notation) return;
+  if (!state.sessionId) { toast('Join a session first'); return; }
+  socket.emit('dice:roll', { notation }, (res) => {
+    if (res) showRollResult({ ...res, playerId: state.playerId });
+  });
+}
+
+function showRollResult(res) {
+  const el = document.getElementById('roll-result');
+  const isCrit = res.breakdown?.dice?.some(d => d.die === 20 && d.roll === 20);
+  const isFumble = res.breakdown?.dice?.some(d => d.die === 20 && d.roll === 1);
+  const cls = isCrit ? 'crit' : isFumble ? 'fumble' : '';
+  const label = isCrit ? '⭐ CRITICAL HIT!' : isFumble ? '💀 FUMBLE' : '';
+
+  el.innerHTML = `
+    <div class="roll-total ${cls}">${res.total}</div>
+    <div class="roll-notation">${res.notation}</div>
+    ${res.breakdown ? `<div class="roll-breakdown">[${res.breakdown.dice.map(d => d.roll).join(', ')}]${res.breakdown.modifier ? (res.breakdown.modifier > 0 ? ' +' : ' ') + res.breakdown.modifier : ''}</div>` : ''}
+    ${label ? `<div style="color:var(--gold);font-size:.85rem;">${label}</div>` : ''}
+  `;
+
+  el.style.animation = 'none';
+  el.offsetHeight;
+  el.style.animation = 'pulse .3s ease';
+}
+
+function resetRoll() {
+  document.getElementById('roll-result').innerHTML = '<span style="color:var(--muted);font-size:.9rem;">Tap a die to roll</span>';
+}
+
+function toggleAdv() {
+  state.advMode = state.advMode === 'adv' ? null : 'adv';
+  document.getElementById('adv-btn').className = 'adv-btn' + (state.advMode === 'adv' ? ' active-adv' : '');
+  document.getElementById('dis-btn').className = 'adv-btn';
+}
+function toggleDis() {
+  state.advMode = state.advMode === 'dis' ? null : 'dis';
+  document.getElementById('dis-btn').className = 'adv-btn' + (state.advMode === 'dis' ? ' active-dis' : '');
+  document.getElementById('adv-btn').className = 'adv-btn';
+}
+
+// ── CHAT ─────────────────────────────────────────────────────────────────────
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || !state.sessionId) return;
+  socket.emit('chat:message', { text });
+  input.value = '';
+}
+
+function addChatMsg(name, text, ts, isRoll = false) {
+  const el = document.getElementById('chat-messages');
+  const time = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  el.insertAdjacentHTML('beforeend', `
+    <div class="msg">
+      <div class="msg-header">
+        <span class="msg-name">${esc(name)}</span>
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="msg-text ${isRoll ? 'roll-msg' : ''}">${esc(text)}</div>
+    </div>
+  `);
+  el.scrollTop = el.scrollHeight;
+}
+
+function addSystemMsg(text) {
+  const el = document.getElementById('chat-messages');
+  el.insertAdjacentHTML('beforeend', `<div class="msg"><div class="msg-text system">— ${esc(text)} —</div></div>`);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
+}
+
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderColor = isErr ? 'var(--red)' : 'var(--border)';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function colorFromName(name) {
+  let h = 0;
+  for (let c of name) h = (h << 5) - h + c.charCodeAt(0);
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue},60%,60%)`;
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+connect();
+
+// Auto-uppercase code field
+document.getElementById('join-code').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase();
+});
+</script>
+
+<style>
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+</style>
+</body>
+</html>
