@@ -17,7 +17,7 @@ const TOOLS: Tool[] = [
   { id: 'measure', icon: '📏', label: 'Measure', shortcut: 'R' },
   { id: 'ping', icon: '📍', label: 'Ping', shortcut: 'P' },
   { id: 'fog-reveal', icon: '🔦', label: 'Reveal', dmOnly: true },
-  { id: 'fog-hide', icon: '🌫️', label: 'Hide Fog', dmOnly: true },
+  { id: 'fog-hide', icon: '🌫️', label: 'Hide', dmOnly: true },
 ];
 
 export default function Toolbar() {
@@ -26,16 +26,35 @@ export default function Toolbar() {
   const isDM = useSessionStore((s) => s.isDM);
   const currentMap = useGameStore((s) => s.currentMap);
   const sessionCode = useSessionStore((s) => s.sessionCode);
+  const fogEnabled = useGameStore((s) => s.fogEnabled);
+  const setFogEnabled = useGameStore((s) => s.setFogEnabled);
 
   const visibleTools = TOOLS.filter((t) => !t.dmOnly || isDM);
+
+  const handleToolClick = (toolId: SessionState['activeTool']) => {
+    setActiveTool(toolId);
+    // Selecting a fog tool auto-enables fog so the canvas mounts and pointer events fire
+    if ((toolId === 'fog-reveal' || toolId === 'fog-hide') && !fogEnabled) {
+      setFogEnabled(true);
+      socketEmit.fogToggle(true);
+    }
+  };
+
+  const handleFogToggle = () => {
+    const next = !fogEnabled;
+    setFogEnabled(next);
+    socketEmit.fogToggle(next);
+    // If turning fog off while a fog paint tool is active, switch back to select
+    if (!next && (activeTool === 'fog-reveal' || activeTool === 'fog-hide')) {
+      setActiveTool('select');
+    }
+  };
 
   const handleMapChange = (mapId: string) => {
     const { availableMaps, setCurrentMap } = useGameStore.getState();
     const mapConfig = availableMaps.find((m) => m.id === mapId);
     if (!mapConfig) return;
-    // Update local store immediately so the DM sees the map without waiting for round-trip
     setCurrentMap(mapConfig);
-    // Broadcast full config so backend stores mapId and all players receive the full MapConfig
     socketEmit.mapChange(mapId, mapConfig as unknown as Record<string, unknown>);
   };
 
@@ -71,16 +90,13 @@ export default function Toolbar() {
       </div>
 
       {/* Divider */}
-      <div
-        className="w-px h-6 flex-shrink-0 mx-1"
-        style={{ background: 'rgba(201,162,39,0.3)' }}
-      />
+      <div className="w-px h-6 flex-shrink-0 mx-1" style={{ background: 'rgba(201,162,39,0.3)' }} />
 
       {/* Tool buttons */}
       {visibleTools.map((tool) => (
         <button
           key={tool.id}
-          onClick={() => setActiveTool(tool.id)}
+          onClick={() => handleToolClick(tool.id)}
           className={`toolbar-btn ${activeTool === tool.id ? 'active' : ''}`}
           title={`${tool.label}${tool.shortcut ? ` (${tool.shortcut})` : ''}`}
           style={{ minWidth: 44 }}
@@ -89,6 +105,34 @@ export default function Toolbar() {
           <span style={{ fontSize: '0.6rem' }}>{tool.label}</span>
         </button>
       ))}
+
+      {/* DM-only fog ON/OFF toggle — separate from the reveal/hide paint tools */}
+      {isDM && (
+        <>
+          <div className="w-px h-6 flex-shrink-0 mx-1" style={{ background: 'rgba(201,162,39,0.3)' }} />
+          <button
+            onClick={handleFogToggle}
+            title={fogEnabled ? 'Fog ON — click to disable fog of war' : 'Fog OFF — click to enable fog of war'}
+            style={{
+              minWidth: 52,
+              padding: '2px 6px',
+              fontFamily: 'Cinzel, serif',
+              fontSize: '0.6rem',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 2,
+              background: fogEnabled ? 'rgba(201,162,39,0.25)' : 'rgba(255,255,255,0.05)',
+              border: fogEnabled ? '1px solid rgba(201,162,39,0.7)' : '1px solid rgba(255,255,255,0.2)',
+              color: fogEnabled ? '#c9a227' : 'rgba(244,228,188,0.4)',
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{ fontSize: '1rem', lineHeight: 1 }}>{fogEnabled ? '🌑' : '☀️'}</span>
+            <span>{fogEnabled ? 'Fog ON' : 'Fog OFF'}</span>
+          </button>
+        </>
+      )}
 
       {/* Flex spacer */}
       <div className="flex-1" />
