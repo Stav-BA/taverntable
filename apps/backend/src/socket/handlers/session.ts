@@ -96,41 +96,48 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
 
   socket.on('session:join', async (payload: {
     code?: string;
-    sessionId?: string;   // frontend sends 'session-CODE'
+    sessionId?: string;   // may be Prisma CUID OR 'session-CODE' format
     playerId?: string;    // frontend-generated client ID
     playerName?: string;
     isDM?: boolean;
     colour?: string;
   }, ack) => {
     try {
-      // Accept { code } OR { sessionId: 'session-CODE' } from frontend
-      let code = payload.code;
-      if (!code && payload.sessionId) {
-        code = payload.sessionId.replace(/^session-/i, '');
-      }
       const playerName = payload.playerName;
-
-      if (!code || !playerName) {
-        socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'Session code and player name are required' });
+      if (!playerName) {
+        socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'Player name is required' });
         return;
       }
 
-      const session = await prisma.session.findUnique({
-        where: { code: code.toUpperCase() },
-      });
+      // Resolve session: try direct ID first, then code lookup
+      let session = null;
+
+      // 1. Direct Prisma ID (CUID) — used on reconnect when sessionId is stored from session:create
+      if (payload.sessionId && !payload.sessionId.startsWith('session-')) {
+        session = await prisma.session.findUnique({ where: { id: payload.sessionId } });
+      }
+
+      // 2. session-CODE format (strip prefix, look up by code)
+      if (!session && payload.sessionId?.startsWith('session-')) {
+        const code = payload.sessionId.replace(/^session-/i, '').toUpperCase();
+        session = await prisma.session.findUnique({ where: { code } });
+      }
+
+      // 3. Explicit code field
+      if (!session && payload.code) {
+        session = await prisma.session.findUnique({ where: { code: payload.code.toUpperCase() } });
+      }
 
       if (!session) {
-        socket.emit('error', { code: 'SESSION_NOT_FOUND', message: `No session with code ${code}` });
+        socket.emit('error', { code: 'SESSION_NOT_FOUND', message: 'Session not found' });
         return;
       }
 
       // Use client-provided playerId if given, else create one
       const playerId = payload.playerId || socket.id;
 
-      // DM joining = fresh session: wipe old Redis state so stale fog/tokens don't bleed in
-      const gameState = payload.isDM
-        ? await initGameState(session.id)
-        : await getOrInitGameState(session.id);
+      // Always get-or-init — never wipe state on reconnect (was clearing tokens/fog every DM reconnect)
+      const gameState = await getOrInitGameState(session.id);
 
       await socket.join(session.id);
       socketMeta._sessionId = session.id;
