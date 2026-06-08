@@ -43,7 +43,7 @@ function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
     <div className="flex flex-col gap-1">
       <div className="flex justify-between items-baseline">
         <span className="font-cinzel text-xs" style={{ color: 'rgba(244,228,188,0.5)' }}>HP</span>
-        <span className="font-cinzel text-sm font-bold" style={{ color }}>
+        <span className="font-cinzel text-sm font-bold" style={{ color: colour }}>
           {hp} / {maxHp}
         </span>
       </div>

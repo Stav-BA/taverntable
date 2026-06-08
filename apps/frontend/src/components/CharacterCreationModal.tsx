@@ -765,11 +765,13 @@ function StepBackground({
 function StepFinalize({
   name, setName,
   colour, setColour,
+  description, setDescription,
   raceName, className, backgroundName,
   assignments, rolledScores,
 }: {
   name: string; setName: (n: string) => void;
   colour: string; setColour: (c: string) => void;
+  description: string; setDescription: (d: string) => void;
   raceName: string; className: string; backgroundName: string;
   assignments: Partial<Record<AbilityKey, number>>;
   rolledScores: RolledScore[];
@@ -815,6 +817,31 @@ function StepFinalize({
           onFocus={e => { e.target.style.borderColor = S.gold; }}
           onBlur={e => { e.target.style.borderColor = 'rgba(201,162,39,0.3)'; }}
         />
+      </div>
+
+      {/* Character Description */}
+      <div style={{ marginBottom: '0.75rem' }}>
+        <label style={labelStyle}>Character Description <span style={{ color: 'rgba(201,162,39,0.5)', fontWeight: 400 }}>(optional)</span></label>
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder={`Describe your ${raceName} ${className}... What do they look like? What drives them? What dark secret do they carry? What quirk makes them unforgettable at the table?`}
+          maxLength={400}
+          rows={4}
+          style={{
+            ...inputStyle,
+            resize: 'vertical',
+            minHeight: 90,
+            lineHeight: '1.5',
+            fontFamily: 'Crimson Text, Georgia, serif',
+            fontSize: '0.95rem',
+          } as React.CSSProperties}
+          onFocus={e => { e.target.style.borderColor = S.gold; }}
+          onBlur={e => { e.target.style.borderColor = 'rgba(201,162,39,0.3)'; }}
+        />
+        <p style={{ fontFamily: 'Crimson Text, serif', fontSize: '0.78rem', color: 'rgba(201,162,39,0.4)', marginTop: '0.25rem', textAlign: 'right' }}>
+          {description.length}/400
+        </p>
       </div>
 
       {/* Token colour */}
@@ -895,6 +922,16 @@ function StepFinalize({
             {allSkills.join(' · ')}
           </p>
         </div>
+
+        {/* Description preview */}
+        {description.trim() && (
+          <div style={{ borderTop: '1px solid rgba(201,162,39,0.2)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+            <p style={{ fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: S.gold, marginBottom: 3 }}>BACKSTORY</p>
+            <p style={{ fontFamily: 'Crimson Text, serif', fontSize: '0.85rem', color: S.creamDim, margin: 0, lineHeight: 1.6, fontStyle: 'italic' }}>
+              "{description.trim()}"
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -960,7 +997,7 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
 
 // ─── Main Modal ────────────────────────────────────────────────────────────────
 
-export default function CharacterCreationModal({ onClose }: { onClose?: () => void }) {
+export default function CharacterCreationModal({ onClose, onComplete }: { onClose?: () => void; onComplete?: () => void }) {
   const player = useSessionStore((s) => s.player);
   const addToken = useGameStore((s) => s.addToken);
 
@@ -979,6 +1016,7 @@ export default function CharacterCreationModal({ onClose }: { onClose?: () => vo
   // Step 5
   const [name, setName] = useState(player?.characterName || player?.name || '');
   const [colour, setColour] = useState(player?.colour || TOKEN_COLOURS[1]);
+  const [description, setDescription] = useState('');
 
   const canAdvance = useCallback((): boolean => {
     if (step === 0) return !!raceName;
@@ -1026,11 +1064,16 @@ export default function CharacterCreationModal({ onClose }: { onClose?: () => vo
       playerId: player.id,
       conditions: [] as [],
       isVisible: true,
+      description: description.trim(),
+      race: raceName,
+      class: className,
+      background: backgroundName,
     };
 
     addToken(token);
     socketEmit.tokenAdd(token as unknown as Record<string, unknown>);
     onClose?.();
+    onComplete?.();
   };
 
   const nextLabel = step === TOTAL_STEPS - 1 ? 'Enter the Adventure' : 'Next';
@@ -1093,6 +1136,7 @@ export default function CharacterCreationModal({ onClose }: { onClose?: () => vo
             <StepFinalize
               name={name} setName={setName}
               colour={colour} setColour={setColour}
+              description={description} setDescription={setDescription}
               raceName={raceName} className={className} backgroundName={backgroundName}
               assignments={assignments} rolledScores={rolledScores}
             />
