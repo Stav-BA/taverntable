@@ -12,7 +12,7 @@ export async function createPixiApp(canvas: HTMLCanvasElement): Promise<Applicat
   await app.init({
     canvas,
     resizeTo: canvas.parentElement ?? canvas,
-    background: '#2a1800',
+    backgroundAlpha: 0,   // transparent — map background is a CSS div behind this canvas
     antialias: true,
     resolution: window.devicePixelRatio || 1,
     autoDensity: true,

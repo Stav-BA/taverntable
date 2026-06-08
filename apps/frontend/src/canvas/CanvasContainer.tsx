@@ -3,17 +3,82 @@ import { useGameStore } from '@/stores/gameStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { socketEmit } from '@/lib/socket';
 import { createPixiApp, destroyPixiApp } from './PixiApp';
-import { MapRenderer } from './MapRenderer';
 import { GridSystem } from './GridSystem';
 import { TokenManager } from './TokenManager';
 import { FogCanvas } from './FogCanvas';
 import type { Application } from 'pixi.js';
-import type { RevealedArea } from '@/stores/gameStore';
+import type { RevealedArea, MapConfig } from '@/stores/gameStore';
+
+// ── Map background styles ──────────────────────────────────────────────────
+function getMapStyle(map: MapConfig | null): React.CSSProperties {
+  if (!map) return { background: '#1a0f00' };
+
+  const id = map.id ?? '';
+  const gridPx = map.gridSizePx ?? 70;
+
+  if (id.includes('tavern') || id.includes('inn')) {
+    // Warm oak wood planks — horizontal lines every gridSizePx
+    return {
+      background: '#a0692a',
+      backgroundImage: [
+        // Alternating plank shades
+        `repeating-linear-gradient(
+          180deg,
+          rgba(0,0,0,0) 0px,
+          rgba(0,0,0,0) ${gridPx - 3}px,
+          rgba(0,0,0,0.25) ${gridPx - 3}px,
+          rgba(0,0,0,0.25) ${gridPx}px
+        )`,
+        // Subtle grain
+        `repeating-linear-gradient(
+          92deg,
+          rgba(255,255,255,0) 0px,
+          rgba(255,255,255,0.03) 4px,
+          rgba(255,255,255,0) 8px
+        )`,
+      ].join(', '),
+    };
+  }
+
+  if (id.includes('dungeon') || id.includes('cave')) {
+    // Gray stone blocks — grid seams
+    return {
+      background: '#707080',
+      backgroundImage: [
+        `repeating-linear-gradient(
+          0deg,
+          rgba(0,0,0,0.3) 0px,
+          rgba(0,0,0,0.3) 2px,
+          transparent 2px,
+          transparent ${gridPx}px
+        )`,
+        `repeating-linear-gradient(
+          90deg,
+          rgba(0,0,0,0.3) 0px,
+          rgba(0,0,0,0.3) 2px,
+          transparent 2px,
+          transparent ${gridPx}px
+        )`,
+      ].join(', '),
+    };
+  }
+
+  if (id.includes('forest') || id.includes('outdoor')) {
+    // Bright grass green with subtle variation
+    return {
+      background: '#4a8f2a',
+      backgroundImage:
+        `radial-gradient(ellipse 80% 60% at 30% 40%, rgba(90,160,50,0.5) 0%, transparent 60%),
+         radial-gradient(ellipse 60% 80% at 70% 70%, rgba(38,100,18,0.4) 0%, transparent 50%)`,
+    };
+  }
+
+  return { background: '#5a5060' };
+}
 
 export default function CanvasContainer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<Application | null>(null);
-  const mapRendererRef = useRef<MapRenderer | null>(null);
   const gridRef = useRef<GridSystem | null>(null);
   const tokenManagerRef = useRef<TokenManager | null>(null);
   const [ready, setReady] = useState(false);
@@ -30,10 +95,9 @@ export default function CanvasContainer() {
 
   const fogToolActive = isDM && (activeTool === 'fog-reveal' || activeTool === 'fog-hide');
 
-  // Initialise PixiJS (map + grid + tokens only — fog is now a React canvas overlay)
+  // ── Initialise PixiJS (grid + tokens only — map is CSS, fog is Canvas2D) ──
   useEffect(() => {
     if (!canvasRef.current) return;
-
     let mounted = true;
 
     const init = async () => {
@@ -43,12 +107,8 @@ export default function CanvasContainer() {
       appRef.current = app;
       app.stage.eventMode = 'static';
 
-      // Layers in Z order: map → grid → tokens
-      const mapRenderer = new MapRenderer(app);
-      mapRendererRef.current = mapRenderer;
-
       const grid = new GridSystem(app);
-      grid.attachToStage(1);
+      grid.attachToStage(0);
       gridRef.current = grid;
 
       const tokenManager = new TokenManager(
@@ -61,7 +121,7 @@ export default function CanvasContainer() {
           useSessionStore.getState().setSelectedTokenId(tokenId);
         }
       );
-      tokenManager.attachToStage(2);
+      tokenManager.attachToStage(1);
       tokenManagerRef.current = tokenManager;
 
       setReady(true);
@@ -73,49 +133,51 @@ export default function CanvasContainer() {
       mounted = false;
       destroyPixiApp();
       appRef.current = null;
-      mapRendererRef.current = null;
       gridRef.current = null;
       tokenManagerRef.current = null;
       setReady(false);
     };
   }, []);
 
-  // Map change
+  // ── Grid redraws when map changes ─────────────────────────────────────────
   useEffect(() => {
-    if (!ready || !currentMap || !mapRendererRef.current || !gridRef.current) return;
-    mapRendererRef.current.loadMap(currentMap);
+    if (!ready || !currentMap || !gridRef.current) return;
     gridRef.current.drawGrid(currentMap);
-
-    // Redraw procedural map after a frame so PixiJS has its final canvas size
-    const t = setTimeout(() => {
-      mapRendererRef.current?.redrawIfProcedural(currentMap);
-      gridRef.current?.drawGrid(currentMap);
-    }, 300);
-    return () => clearTimeout(t);
   }, [ready, currentMap]);
 
-  // Token sync
+  // ── Token sync ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!ready || !currentMap || !tokenManagerRef.current || !player) return;
     tokenManagerRef.current.syncTokens(tokens, currentMap, player.id, isDM);
   }, [ready, tokens, currentMap, player, isDM]);
 
-  // Fog reveal handler (used by FogCanvas brush)
+  // ── Fog reveal handler ────────────────────────────────────────────────────
   const handleReveal = useCallback((area: RevealedArea) => {
     addRevealedArea(area);
     socketEmit.fogReveal(area as unknown as Record<string, unknown>);
   }, [addRevealedArea]);
 
+  const mapStyle = getMapStyle(currentMap);
+
   return (
-    <div className="canvas-wrapper w-full h-full relative" style={{ overflow: 'hidden' }}>
-      {/* PixiJS canvas — map, grid, tokens */}
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+
+      {/* Layer 1: CSS map background — always visible, no PixiJS involved */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        ...mapStyle,
+        transition: 'background 0.4s ease',
+      }} />
+
+      {/* Layer 2: PixiJS canvas — transparent bg, renders grid + tokens */}
       <canvas
         ref={canvasRef}
         id="pixi-canvas"
-        style={{ display: 'block', width: '100%', height: '100%' }}
+        style={{ position: 'absolute', inset: 0, display: 'block', width: '100%', height: '100%' }}
       />
 
-      {/* Fog overlay — native Canvas2D, guaranteed correct compositing */}
+      {/* Layer 3: Fog of war — Canvas2D overlay with evenodd holes */}
       <FogCanvas
         areas={fogRevealed}
         isDM={isDM}
@@ -125,15 +187,11 @@ export default function CanvasContainer() {
       />
 
       {!ready && (
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ background: '#0a0a0a' }}
-        >
+        <div className="absolute inset-0 flex items-center justify-center"
+          style={{ background: '#0a0a0a', zIndex: 10 }}>
           <div className="flex flex-col items-center gap-3">
-            <div
-              className="w-16 h-16 rounded-full border-4 border-gold animate-spin"
-              style={{ borderTopColor: 'transparent' }}
-            />
+            <div className="w-16 h-16 rounded-full border-4 border-gold animate-spin"
+              style={{ borderTopColor: 'transparent' }} />
             <p className="font-cinzel text-gold text-sm tracking-wider">Loading Map...</p>
           </div>
         </div>
