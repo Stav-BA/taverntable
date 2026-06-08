@@ -13,9 +13,9 @@ import type { RevealedArea, MapConfig } from '@/stores/gameStore';
 function getMapImageUrl(map: MapConfig | null): string | null {
   if (!map) return null;
   const id = map.id ?? '';
-  if (id.includes('tavern') || id.includes('inn')) return '/maps/tavern-interior.svg';
-  if (id.includes('dungeon') || id.includes('cave')) return '/maps/dungeon-entrance.svg';
-  if (id.includes('forest') || id.includes('outdoor')) return '/maps/forest-clearing.svg';
+  if (id.includes('tavern') || id.includes('inn')) return '/maps/tavern-interior.png';
+  if (id.includes('dungeon') || id.includes('cave')) return '/maps/dungeon-entrance.png';
+  if (id.includes('forest') || id.includes('outdoor')) return '/maps/forest-clearing.png';
   // If the map has a custom imageUrl, use it
   if ((map as { imageUrl?: string }).imageUrl) return (map as { imageUrl?: string }).imageUrl!;
   return null;
