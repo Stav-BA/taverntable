@@ -251,6 +251,18 @@ export function useSocket() {
       setConnectedPlayers(players);
     });
 
+    // Rest events
+    socket.on('rest:taken', ({ type }: { type: 'short' | 'long' }) => {
+      addChatMessage({
+        id: `sys-rest-${Date.now()}`,
+        type: 'system',
+        text: type === 'short'
+          ? 'Short Rest taken — spend Hit Dice to recover HP.'
+          : 'Long Rest complete — all HP, spell slots, and Hit Dice restored.',
+        timestamp: Date.now(),
+      });
+    });
+
     return () => {
       hasConnected.current = false;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
@@ -279,6 +291,7 @@ export function useSocket() {
       socket.off('player:joined');
       socket.off('player:left');
       socket.off('players:list');
+      socket.off('rest:taken');
       disconnectSocket();
     };
   }, [sessionId, player?.id, isDM]);

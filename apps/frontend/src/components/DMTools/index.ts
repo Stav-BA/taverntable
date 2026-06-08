@@ -9,3 +9,6 @@ export { JournalEntry } from './CampaignJournal/JournalEntry';
 export { AIDMPanel } from './AIDMPanel/AIDMPanel';
 export { NarrationBubble } from './AIDMPanel/NarrationBubble';
 export { TonePicker } from './AIDMPanel/TonePicker';
+export { ConditionsPanel } from './ConditionsPanel';
+export { DeathSaveTracker } from './DeathSaveTracker';
+export { RestManager } from './RestManager';

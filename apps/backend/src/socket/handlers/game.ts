@@ -186,6 +186,29 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     socket.to(sessionId).emit('ping', { ...payload, playerId: s._playerId });
   });
 
+  // ── Rest: short ─────────────────────────────────────────────────────────────
+  socket.on('rest:short', async () => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('rest:taken', { type: 'short' });
+    } catch (err) {
+      console.error('[rest:short]', err);
+    }
+  });
+
+  // ── Rest: long ──────────────────────────────────────────────────────────────
+  socket.on('rest:long', async () => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      // Broadcast rest to all clients; exhaustion clearing handled client-side
+      io.to(sessionId).emit('rest:taken', { type: 'long' });
+    } catch (err) {
+      console.error('[rest:long]', err);
+    }
+  });
+
   // ── Legacy turn:next ────────────────────────────────────────────────────────
   socket.on('turn:next', async () => {
     try {

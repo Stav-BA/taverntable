@@ -4,12 +4,17 @@ import { NPCManager } from './NPCManager/NPCManager';
 import { EncounterBuilder } from './EncounterBuilder/EncounterBuilder';
 import { CampaignJournal } from './CampaignJournal/CampaignJournal';
 import { AIDMPanel } from './AIDMPanel/AIDMPanel';
+import { ConditionsPanel } from './ConditionsPanel';
+import { DeathSaveTracker } from './DeathSaveTracker';
+import { RestManager } from './RestManager';
 
-type DMTab = 'npcs' | 'encounters' | 'journal' | 'ai-dm';
+type DMTab = 'npcs' | 'encounters' | 'journal' | 'ai-dm' | 'combat' | 'conditions';
 
 const TABS: Array<{ id: DMTab; label: string; icon: string }> = [
   { id: 'npcs',       label: 'NPCs',       icon: '🧙' },
   { id: 'encounters', label: 'Encounters', icon: '⚔️' },
+  { id: 'combat',     label: 'Combat',     icon: '🩸' },
+  { id: 'conditions', label: 'Conditions', icon: '🎭' },
   { id: 'journal',    label: 'Journal',    icon: '📜' },
   { id: 'ai-dm',      label: 'AI DM',      icon: '🔮' },
 ];
@@ -24,7 +29,7 @@ export function DMToolsPanel() {
     <div className="flex flex-col h-full" style={{ minHeight: 0 }}>
       {/* Tab bar */}
       <div
-        className="flex flex-shrink-0"
+        className="flex flex-shrink-0 flex-wrap"
         style={{ borderBottom: '1px solid rgba(201,162,39,0.3)' }}
       >
         {TABS.map((tab) => (
@@ -39,10 +44,11 @@ export function DMToolsPanel() {
               border: 'none',
               cursor: 'pointer',
               paddingBottom: activeTab === tab.id ? '6px' : '8px',
+              minWidth: 0,
             }}
           >
             <span className="text-base leading-none">{tab.icon}</span>
-            <span className="uppercase tracking-wider" style={{ fontSize: 9 }}>{tab.label}</span>
+            <span className="uppercase tracking-wider truncate w-full text-center" style={{ fontSize: 9 }}>{tab.label}</span>
           </button>
         ))}
       </div>
@@ -53,6 +59,15 @@ export function DMToolsPanel() {
         {activeTab === 'encounters' && <EncounterBuilder />}
         {activeTab === 'journal'    && <CampaignJournal />}
         {activeTab === 'ai-dm'      && <AIDMPanel />}
+        {activeTab === 'conditions' && <ConditionsPanel />}
+        {activeTab === 'combat'     && (
+          <div className="flex flex-col gap-4">
+            <DeathSaveTracker />
+            <div style={{ borderTop: '1px solid rgba(201,162,39,0.2)', paddingTop: '1rem' }}>
+              <RestManager />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

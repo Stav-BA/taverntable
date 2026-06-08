@@ -81,4 +81,7 @@ export const socketEmit = {
   audioVolume: (volume: number) => getSocket().emit('audio:volume', { volume }),
 
   ping: (x: number, y: number, colour: string) => getSocket().emit('ping', { x, y, colour }),
+
+  restShort: () => getSocket().emit('rest:short'),
+  restLong:  () => getSocket().emit('rest:long'),
 };
