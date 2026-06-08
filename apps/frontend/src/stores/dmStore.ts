@@ -68,12 +68,14 @@ interface DMState {
   // AI DM state
   campaignName: string;
   campaignTone: 'heroic' | 'gritty' | 'comedic' | 'horror' | 'mystery';
+  campaignLore: string;
   campaignSetting: string;
   currentScene: string;
   aiMessages: AIDMMessage[];
   isAIStreaming: boolean;
   setCampaignName: (name: string) => void;
   setCampaignTone: (tone: DMState['campaignTone']) => void;
+  setCampaignLore: (lore: string) => void;
   setCampaignSetting: (setting: string) => void;
   setCurrentScene: (scene: string) => void;
   addAIMessage: (msg: AIDMMessage) => void;
@@ -132,12 +134,14 @@ export const useDMStore = create<DMState>()(
 
       campaignName: '',
       campaignTone: 'heroic',
+      campaignLore: '',
       campaignSetting: '',
       currentScene: '',
       aiMessages: [],
       isAIStreaming: false,
       setCampaignName: (campaignName) => set({ campaignName }),
       setCampaignTone: (campaignTone) => set({ campaignTone }),
+      setCampaignLore: (campaignLore) => set({ campaignLore }),
       setCampaignSetting: (campaignSetting) => set({ campaignSetting }),
       setCurrentScene: (currentScene) => set({ currentScene }),
       addAIMessage: (msg) => set((s) => ({ aiMessages: [...s.aiMessages, msg] })),
@@ -165,6 +169,7 @@ export const useDMStore = create<DMState>()(
         currentSession: state.currentSession,
         campaignName: state.campaignName,
         campaignTone: state.campaignTone,
+        campaignLore: state.campaignLore,
         campaignSetting: state.campaignSetting,
         currentScene: state.currentScene,
         currentLocation: state.currentLocation,

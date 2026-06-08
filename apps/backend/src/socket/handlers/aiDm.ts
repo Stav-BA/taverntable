@@ -86,6 +86,11 @@ interface UpdateScenePayload {
   scene: string;
 }
 
+interface LoreGeneratePayload {
+  tone: string;
+  seed?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Registration function
 // ---------------------------------------------------------------------------
@@ -392,6 +397,53 @@ export function registerAIDMHandlers(io: Server, socket: Socket): void {
     } catch (err) {
       console.error('[aiDm] dm:undo-event error:', err);
       socket.emit('dm:error', { code: 'UNDO_FAILED', message: (err as Error).message });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // lore:generate — DM requests campaign lore generation before session start
+  // No active session required — streams directly back to the requesting socket
+  // -------------------------------------------------------------------------
+
+  socket.on('lore:generate', async (payload: LoreGeneratePayload) => {
+    const { tone, seed } = payload ?? {};
+
+    if (!tone || typeof tone !== 'string') {
+      socket.emit('dm:error', { code: 'INVALID_PAYLOAD', message: 'tone is required' });
+      return;
+    }
+
+    const seedText = seed && seed.trim() ? seed.trim() : 'a classic fantasy world';
+
+    const prompt = `Generate a rich D&D campaign lore of approximately 200 words. Tone: ${tone}. Theme hint: ${seedText}. Write in second person ("Your party finds themselves..."). Include: world setting, main threat/conflict, a mystery, and what's at stake. Do not use headers or bullet points — write flowing prose.`;
+
+    let fullText = '';
+
+    try {
+      const genAI = new (await import('@google/generative-ai')).GoogleGenerativeAI(
+        process.env.GOOGLE_API_KEY ?? '',
+      );
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: { maxOutputTokens: 400, temperature: 0.85 },
+      });
+
+      const streamResult = await model.generateContentStream(prompt);
+
+      for await (const chunk of streamResult.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) {
+          fullText += chunkText;
+          socket.emit('lore:chunk', { chunk: chunkText });
+        }
+      }
+
+      socket.emit('lore:done', { text: fullText });
+    } catch (err) {
+      console.error('[aiDm] lore:generate error:', err);
+      socket.emit('lore:done', {
+        text: 'Your party finds themselves on the edge of a forgotten kingdom, where an ancient evil stirs beneath the mountains. The land groans under a creeping shadow — crops wither, travelers vanish, and the stars themselves seem dimmer each night. At the heart of this darkness lies a mystery: a sealed vault beneath the ruins of Moonsreach, said to contain either salvation or annihilation. The weight of countless lives rests on your shoulders.',
+      });
     }
   });
 }
