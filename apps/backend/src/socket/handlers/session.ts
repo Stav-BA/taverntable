@@ -3,16 +3,16 @@ import { prisma } from '../../db/client';
 import { initGameState, getOrInitGameState } from '../../redis/sessionState';
 
 // In-memory map of sessionId → connected players (for rooms not persisted to DB)
-const roomPlayers = new Map<string, Map<string, { id: string; name: string; colour: string }>>();
+const roomPlayers = new Map<string, Map<string, { id: string; name: string; colour: string; ready?: boolean }>>();
 
-function getRoomPlayers(sessionId: string): Map<string, { id: string; name: string; colour: string }> {
+function getRoomPlayers(sessionId: string): Map<string, { id: string; name: string; colour: string; ready?: boolean }> {
   if (!roomPlayers.has(sessionId)) {
     roomPlayers.set(sessionId, new Map());
   }
   return roomPlayers.get(sessionId)!;
 }
 
-function roomPlayersList(sessionId: string): Array<{ id: string; name: string; colour: string }> {
+function roomPlayersList(sessionId: string): Array<{ id: string; name: string; colour: string; ready?: boolean }> {
   return Array.from(getRoomPlayers(sessionId).values());
 }
 
@@ -203,6 +203,38 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
     } catch (err) {
       console.error('[session:leave]', err);
       socket.emit('error', { code: 'LEAVE_FAILED', message: (err as Error).message });
+    }
+  });
+
+  // ── Player: ready ───────────────────────────────────────────────────────────
+  socket.on('player:ready', (payload: { playerId: string; ready: boolean }) => {
+    try {
+      const sessionId = socketMeta._sessionId;
+      if (!sessionId) return;
+      const { playerId, ready } = payload;
+      const players = getRoomPlayers(sessionId);
+      const existing = players.get(playerId);
+      if (existing) {
+        players.set(playerId, { ...existing, ready });
+      }
+      // Broadcast updated players list to all in room
+      io.to(sessionId).emit('players:list', roomPlayersList(sessionId));
+    } catch (err) {
+      console.error('[player:ready]', err);
+    }
+  });
+
+  // ── Adventure: start ────────────────────────────────────────────────────────
+  socket.on('adventure:start', (payload: { campaignName: string; lore: string }) => {
+    try {
+      const sessionId = socketMeta._sessionId;
+      if (!sessionId) return;
+      io.to(sessionId).emit('adventure:started', {
+        campaignName: payload.campaignName ?? '',
+        lore: payload.lore ?? '',
+      });
+    } catch (err) {
+      console.error('[adventure:start]', err);
     }
   });
 

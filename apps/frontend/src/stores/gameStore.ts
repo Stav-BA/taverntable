@@ -44,6 +44,16 @@ export interface Combatant {
   colour: string;
   conditions: Condition[];
   isPlayer: boolean;
+  // Extended combat fields (2024 rules)
+  dexMod: number;
+  initiativeRoll: number;
+  actionUsed: boolean;
+  bonusActionUsed: boolean;
+  reactionUsed: boolean;
+  movementUsed: number;
+  speed: number;
+  isEnemy: boolean;
+  surprised: boolean;
 }
 
 export interface RevealedArea {
@@ -110,6 +120,11 @@ export interface GameState {
   initiative: Combatant[];
   currentTurnIndex: number;
   inCombat: boolean;
+  round: number;
+
+  // Adventure started overlay
+  adventureStarted: boolean;
+  adventurePayload: { campaignName: string; lore: string } | null;
 
   // Chat
   chatMessages: ChatMessage[];
@@ -128,6 +143,8 @@ export interface GameState {
   updateCombatant: (id: string, updates: Partial<Combatant>) => void;
   nextTurn: () => void;
   setInCombat: (inCombat: boolean) => void;
+  setRound: (round: number) => void;
+  setAdventureStarted: (started: boolean, payload?: { campaignName: string; lore: string }) => void;
   addChatMessage: (msg: ChatMessage) => void;
   addDiceRoll: (roll: DiceRollResult) => void;
   applyServerState: (state: Partial<GameState>) => void;
@@ -174,6 +191,9 @@ export const useGameStore = create<GameState>()(
     initiative: [],
     currentTurnIndex: 0,
     inCombat: false,
+    round: 0,
+    adventureStarted: false,
+    adventurePayload: null,
     chatMessages: [
       {
         id: 'sys-welcome',
@@ -208,10 +228,20 @@ export const useGameStore = create<GameState>()(
         initiative: state.initiative.map((c) => (c.id === id ? { ...c, ...updates } : c)),
       })),
     nextTurn: () =>
-      set((state) => ({
-        currentTurnIndex: (state.currentTurnIndex + 1) % Math.max(state.initiative.length, 1),
-      })),
+      set((state) => {
+        const len = Math.max(state.initiative.length, 1);
+        const next = (state.currentTurnIndex + 1) % len;
+        const newRound = next === 0 ? state.round + 1 : state.round;
+        // Reset reaction for the combatant whose turn is starting
+        const updatedInitiative = state.initiative.map((c, i) =>
+          i === next ? { ...c, reactionUsed: false } : c
+        );
+        return { currentTurnIndex: next, round: newRound, initiative: updatedInitiative };
+      }),
     setInCombat: (inCombat) => set({ inCombat }),
+    setRound: (round) => set({ round }),
+    setAdventureStarted: (adventureStarted, payload) =>
+      set({ adventureStarted, adventurePayload: payload ?? null }),
     addChatMessage: (msg) =>
       set((state) => ({
         chatMessages: [...state.chatMessages.slice(-199), msg],

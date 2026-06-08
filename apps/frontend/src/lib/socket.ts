@@ -84,4 +84,10 @@ export const socketEmit = {
 
   restShort: () => getSocket().emit('rest:short'),
   restLong:  () => getSocket().emit('rest:long'),
+
+  playerReady: (playerId: string, ready: boolean) =>
+    getSocket().emit('player:ready', { playerId, ready }),
+
+  adventureStart: (campaignName: string, lore: string) =>
+    getSocket().emit('adventure:start', { campaignName, lore }),
 };

@@ -28,7 +28,7 @@ export function useGameState() {
   const isMyTurn =
     inCombat &&
     currentTurnCombatant !== null &&
-    (isDM || currentTurnCombatant?.playerId === player?.id);
+    (isDM || currentTurnCombatant?.tokenId === player?.id);
 
   const myToken = tokens.find((t) => t.playerId === player?.id) ?? null;
 

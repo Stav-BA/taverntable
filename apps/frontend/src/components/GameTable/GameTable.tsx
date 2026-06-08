@@ -6,8 +6,10 @@ import DiceRoller from '@/components/DiceRoller/DiceRoller';
 import AudioPlayer from '@/components/AudioPlayer/AudioPlayer';
 import CanvasContainer from '@/canvas/CanvasContainer';
 import CharacterCreationModal from '@/components/CharacterCreationModal';
+import AdventureStartOverlay from '@/components/AdventureStartOverlay';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useGameStore } from '@/stores/gameStore';
+import { useDMStore } from '@/stores/dmStore';
 import { socketEmit } from '@/lib/socket';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,7 +19,12 @@ export default function GameTable() {
   const clearSession = useSessionStore((s) => s.clearSession);
   const tokens = useGameStore((s) => s.tokens);
   const currentMap = useGameStore((s) => s.currentMap);
+  const adventureStarted = useGameStore((s) => s.adventureStarted);
+  const adventurePayload = useGameStore((s) => s.adventurePayload);
+  const setAdventureStarted = useGameStore((s) => s.setAdventureStarted);
   const navigate = useNavigate();
+
+  const [playerReady, setPlayerReady] = useState(false);
 
   // Reset game state on mount
   useEffect(() => {
@@ -28,11 +35,11 @@ export default function GameTable() {
     gs.setFogEnabled(false);
   }, []);
 
-  // Load default map immediately if none is set
+  // Load default map — always start at tavern
   useEffect(() => {
     if (currentMap) return;
     const { availableMaps, setCurrentMap } = useGameStore.getState();
-    const defaultMap = availableMaps[0];
+    const defaultMap = availableMaps.find((m) => m.id.includes('tavern')) ?? availableMaps[0];
     if (defaultMap) {
       setCurrentMap(defaultMap);
       if (isDM) {
@@ -49,6 +56,12 @@ export default function GameTable() {
   const handleLeave = () => {
     clearSession();
     navigate('/', { replace: true });
+  };
+
+  const handleReadyClick = () => {
+    if (!player) return;
+    setPlayerReady(true);
+    socketEmit.playerReady(player.id, true);
   };
 
   return (
@@ -93,7 +106,7 @@ export default function GameTable() {
             e.currentTarget.style.color = 'rgba(244,228,188,0.7)';
           }}
         >
-          ✕ Leave
+          Leave
         </button>
       </div>
 
@@ -124,7 +137,59 @@ export default function GameTable() {
       {showCharacterCreation && (
         <CharacterCreationModal onComplete={() => setCharacterCreated(true)} />
       )}
+
+      {/* Player "Ready for Adventure" button */}
+      {!isDM && !playerReady && (
+        <ReadyButton onClick={handleReadyClick} />
+      )}
+
+      {/* Adventure start overlay — shown to everyone */}
+      {adventureStarted && adventurePayload && (
+        <AdventureStartOverlay
+          campaignName={adventurePayload.campaignName}
+          lore={adventurePayload.lore}
+          onDismiss={() => setAdventureStarted(false)}
+        />
+      )}
     </div>
+  );
+}
+
+function ReadyButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        position: 'fixed',
+        bottom: 80,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 100,
+        background: 'linear-gradient(135deg, #c9a227, #a8831a)',
+        border: '2px solid #e0b830',
+        color: '#1a0f00',
+        fontFamily: 'Cinzel, serif',
+        fontSize: '0.9rem',
+        fontWeight: 700,
+        padding: '0.7rem 2rem',
+        cursor: 'pointer',
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        boxShadow: '0 4px 20px rgba(201,162,39,0.5)',
+        borderRadius: 2,
+        whiteSpace: 'nowrap',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = '0 6px 28px rgba(201,162,39,0.8)';
+        e.currentTarget.style.transform = 'translateX(-50%) translateY(-2px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = '0 4px 20px rgba(201,162,39,0.5)';
+        e.currentTarget.style.transform = 'translateX(-50%)';
+      }}
+    >
+      Ready for Adventure!
+    </button>
   );
 }
 
@@ -160,7 +225,7 @@ function FogBrushControls() {
           letterSpacing: '0.1em',
         }}
       >
-        {activeTool === 'fog-reveal' ? '🔦 Reveal Mode' : '🌫️ Hide Mode'} — Click drag on map
+        {activeTool === 'fog-reveal' ? 'Reveal Mode' : 'Hide Mode'} — Click drag on map
       </span>
     </div>
   );

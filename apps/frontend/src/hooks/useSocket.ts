@@ -7,6 +7,7 @@ import type { Token, Combatant, RevealedArea, ChatMessage, DiceRollResult, MapCo
 import type { PlayerInfo } from '@/stores/sessionStore';
 import type { AudioTrack } from '@/stores/audioStore';
 
+
 export function useSocket() {
   const hasConnected = useRef(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,6 +35,7 @@ export function useSocket() {
     addChatMessage,
     addDiceRoll,
     applyServerState,
+    setAdventureStarted,
   } = useGameStore.getState();
 
   const { setTrack, pause, setVolume } = useAudioStore.getState();
@@ -251,6 +253,11 @@ export function useSocket() {
       setConnectedPlayers(players);
     });
 
+    // Adventure started overlay
+    socket.on('adventure:started', ({ campaignName, lore }: { campaignName: string; lore: string }) => {
+      setAdventureStarted(true, { campaignName, lore });
+    });
+
     // Rest events
     socket.on('rest:taken', ({ type }: { type: 'short' | 'long' }) => {
       addChatMessage({
@@ -291,6 +298,7 @@ export function useSocket() {
       socket.off('player:joined');
       socket.off('player:left');
       socket.off('players:list');
+      socket.off('adventure:started');
       socket.off('rest:taken');
       disconnectSocket();
     };

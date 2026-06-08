@@ -6,6 +6,7 @@ export interface PlayerInfo {
   name: string;
   colour: string;
   characterName?: string;
+  ready?: boolean;
 }
 
 export interface SessionState {
@@ -26,6 +27,7 @@ export interface SessionState {
   removePlayer: (playerId: string) => void;
   setActiveTool: (tool: SessionState['activeTool']) => void;
   setSelectedTokenId: (id: string | null) => void;
+  setReady: (playerId: string, ready: boolean) => void;
   clearSession: () => void;
 }
 
@@ -54,6 +56,12 @@ export const useSessionStore = create<SessionState>()(
         })),
       setActiveTool: (activeTool) => set({ activeTool }),
       setSelectedTokenId: (selectedTokenId) => set({ selectedTokenId }),
+      setReady: (playerId, ready) =>
+        set((state) => ({
+          connectedPlayers: state.connectedPlayers.map((p) =>
+            p.id === playerId ? { ...p, ready } : p
+          ),
+        })),
       clearSession: () =>
         set({
           sessionId: null,
