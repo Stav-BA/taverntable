@@ -136,6 +136,8 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
       // Use client-provided playerId if given, else create one
       const playerId = payload.playerId || socket.id;
 
+      console.log(`[session:join] player="${playerName}" isDM=${payload.isDM} sessionId=${session.id} roomSize=${(await io.in(session.id).fetchSockets()).length}`);
+
       // Always get-or-init — never wipe state on reconnect (was clearing tokens/fog every DM reconnect)
       const gameState = await getOrInitGameState(session.id);
 
@@ -151,7 +153,9 @@ export function registerSessionHandlers(io: Server, socket: Socket): void {
       socket.to(session.id).emit('player:joined', playerEntry);
 
       // Broadcast updated players list to ALL in the room (so DM Players tab refreshes)
-      io.to(session.id).emit('players:list', roomPlayersList(session.id));
+      const playersList = roomPlayersList(session.id);
+      console.log(`[session:join] broadcasting players:list to room ${session.id}:`, playersList.map(p => p.name));
+      io.to(session.id).emit('players:list', playersList);
 
       // Build game:state response matching frontend useSocket.ts expectations
       const fogRevealed = (gameState?.fog?.revealed ?? []) as Array<{

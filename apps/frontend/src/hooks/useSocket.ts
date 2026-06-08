@@ -48,7 +48,7 @@ export function useSocket() {
 
     // Connection lifecycle
     socket.on('connect', () => {
-      console.log('[Socket] Connected:', socket.id);
+      console.log('[Socket] Connected:', socket.id, '| sessionId:', sessionId, '| isDM:', isDM, '| player:', player.name);
       socket.emit('session:join', {
         sessionId,
         playerId: player.id,
@@ -247,6 +247,7 @@ export function useSocket() {
     });
 
     socket.on('players:list', (players: PlayerInfo[]) => {
+      console.log('[Socket] players:list received:', players);
       setConnectedPlayers(players);
     });
 
