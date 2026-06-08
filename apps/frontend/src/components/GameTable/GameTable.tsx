@@ -25,6 +25,7 @@ export default function GameTable() {
     gs.setFogRevealed([]);
     gs.setTokens([]);
     gs.setInCombat(false);
+    gs.setFogEnabled(false);  // always start with fog OFF
   }, []);
 
   // DM: auto-load the first available map if none is set yet

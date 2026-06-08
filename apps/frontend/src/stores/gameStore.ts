@@ -170,7 +170,7 @@ export const useGameStore = create<GameState>()(
     ],
     tokens: [],
     fogRevealed: [],
-    fogEnabled: true,
+    fogEnabled: false,  // starts OFF — DM enables fog from the toolbar
     initiative: [],
     currentTurnIndex: 0,
     inCombat: false,

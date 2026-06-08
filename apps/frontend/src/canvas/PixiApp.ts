@@ -12,12 +12,19 @@ export async function createPixiApp(canvas: HTMLCanvasElement): Promise<Applicat
   await app.init({
     canvas,
     resizeTo: canvas.parentElement ?? canvas,
-    backgroundAlpha: 0,   // transparent — map background is a CSS div behind this canvas
+    backgroundAlpha: 0,
     antialias: true,
     resolution: window.devicePixelRatio || 1,
     autoDensity: true,
     powerPreference: 'high-performance',
   });
+
+  // Force transparent background — belt-and-suspenders for PixiJS 8
+  app.renderer.background.alpha = 0;
+  // Make the DOM canvas element itself transparent via CSS too
+  canvas.style.background = 'transparent';
+
+  console.log('[TavernTable] PixiJS ready. BG alpha:', app.renderer.background.alpha);
 
   pixiApp = app;
   return app;
