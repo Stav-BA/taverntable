@@ -6,7 +6,7 @@ import { useCharacterStore } from '@/stores/characterStore';
 import { getSocket, socketEmit } from '@/lib/socket';
 import { abilityMod, proficiencyBonus } from '@/lib/classes5e';
 import { MONSTERS } from '@/lib/monsters';
-import { getWeaponById, calcWeaponAttackBonus } from '@/lib/equipment5e';
+import { getWeaponById, calcWeaponAttackBonus, getArmorById, calcArmorAC } from '@/lib/equipment5e';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -356,6 +356,32 @@ function AttackResultBubble({ result, isDM, fumbleChoice, onFumbleChange, onFumb
   );
 }
 
+// ── AC resolution helper ───────────────────────────────────────────────────────
+
+/**
+ * Resolves the real AC for a combatant by looking up their equipped armor from
+ * their character sheet. Falls back to the combatant's stored ac value if no
+ * sheet / armor data is available (e.g. monsters, unlinked tokens).
+ */
+function resolveTargetAC(
+  target: Combatant,
+  tokens: Array<{ id: string; playerId?: string }>,
+  sheets: Record<string, { dex: number; equipment: Array<{ type: string; equipped?: boolean; armorId?: string }> }>,
+): number {
+  const token = tokens.find((t) => t.id === target.tokenId);
+  if (!token?.playerId) return target.ac;
+  const sheet = sheets[token.playerId];
+  if (!sheet) return target.ac;
+  const equippedArmor = sheet.equipment.find(
+    (e) => e.type === 'armor' && e.equipped !== false && e.armorId,
+  );
+  if (!equippedArmor?.armorId) return target.ac;
+  const armorDef = getArmorById(equippedArmor.armorId);
+  if (!armorDef) return target.ac;
+  const dexMod = Math.floor((sheet.dex - 10) / 2);
+  return calcArmorAC(armorDef, dexMod);
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTurn }: Props) {
@@ -364,6 +390,7 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
   const sessionId = useSessionStore((s) => s.sessionId);
   const updateCombatant = useGameStore((s) => s.updateCombatant);
   const initiative = useGameStore((s) => s.initiative);
+  const tokens = useGameStore((s) => s.tokens);
   const sheets = useCharacterStore((s) => s.sheets);
 
   const isMyToken = !isDM && player != null && combatant.isPlayer && combatant.tokenId === player.id;
@@ -476,7 +503,8 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
     const isCrit = d20 === 20;
     const isFumble = d20 === 1;
     const total = d20 + selectedWeapon.attackBonus;
-    const hit = !isFumble && (isCrit || total >= target.ac);
+    const effectiveAC = resolveTargetAC(target, tokens, sheets as Record<string, { dex: number; equipment: Array<{ type: string; equipped?: boolean; armorId?: string }> }>);
+    const hit = !isFumble && (isCrit || total >= effectiveAC);
 
     let damageRolls: number[] = [];
     let damageTotal = 0;
@@ -489,7 +517,7 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
     const cleanName = selectedWeapon.name.replace(' ✓', '');
     const result: AttackResult = {
       d20Roll: d20, attackBonus: selectedWeapon.attackBonus, total,
-      targetAC: target.ac, hit, isCrit, isFumble,
+      targetAC: effectiveAC, hit, isCrit, isFumble,
       damageRolls, damageTotal, damageType: selectedWeapon.damageType,
       actionName: cleanName, targetName: target.name,
     };
@@ -520,7 +548,7 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
       targetName: target.name,
       actionName: cleanName,
       roll: d20, attackBonus: selectedWeapon.attackBonus, total,
-      targetAC: target.ac, hit, isCrit, isFumble,
+      targetAC: effectiveAC, hit, isCrit, isFumble,
       damageTotal, damageType: selectedWeapon.damageType,
       newTargetHp: newHp, newTargetConditions: newConditions,
     });

@@ -3,6 +3,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { socketEmit, getSocket } from '@/lib/socket';
 import CombatantRow from './CombatantRow';
+import PlayerInitiativeModal from './PlayerInitiativeModal';
 import type { Combatant } from '@/stores/gameStore';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -22,6 +23,21 @@ type RollEntry = {
   speed: number;
 };
 
+type PlayerSubmission = {
+  id: string;
+  name: string;
+  roll: number;
+  dexMod: number;
+  total: number;
+  isMonster: boolean;
+  colour: string;
+  hp: number;
+  maxHp: number;
+  ac: number;
+  isPlayer: boolean;
+  speed?: number;
+};
+
 function generateId() {
   return Math.random().toString(36).slice(2, 9);
 }
@@ -37,6 +53,9 @@ function rollWithAdvantage(): number {
 function rollWithDisadvantage(): number {
   return Math.min(rollD20(), rollD20());
 }
+
+// Silence unused-var warnings for the helpers that may be used later
+void rollWithAdvantage;
 
 function makeCombatant(overrides: Partial<Combatant> & { name: string }): Combatant {
   return {
@@ -66,10 +85,14 @@ function makeCombatant(overrides: Partial<Combatant> & { name: string }): Combat
 
 function InitiativeRollModal({
   tokens,
+  playerSubmissions,
+  onRequestRolls,
   onConfirm,
   onCancel,
 }: {
   tokens: Array<{ id: string; name: string; colour: string; isPlayer: boolean; hp: number; maxHp: number; ac: number }>;
+  playerSubmissions?: Array<{ id: string; name: string; total: number; colour: string }>;
+  onRequestRolls?: () => void;
   onConfirm: (entries: RollEntry[]) => void;
   onCancel: () => void;
 }) {
@@ -90,7 +113,6 @@ function InitiativeRollModal({
     }))
   );
 
-  // Plus any manually added NPCs
   const [showAddNpc, setShowAddNpc] = useState(false);
   const [npcName, setNpcName] = useState('');
   const [npcHp, setNpcHp] = useState('10');
@@ -102,9 +124,7 @@ function InitiativeRollModal({
   const handleRoll = (id: string) => {
     const entry = entries.find((e) => e.id === id);
     if (!entry) return;
-    let roll: number;
-    if (entry.surprised) roll = rollWithDisadvantage();
-    else roll = rollD20();
+    const roll = entry.surprised ? rollWithDisadvantage() : rollD20();
     update(id, { roll });
   };
 
@@ -182,26 +202,47 @@ function InitiativeRollModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: 6,
           }}
         >
-          <h2 style={{ fontFamily: 'Cinzel, serif', fontSize: '0.9rem', color: '#c9a227', margin: 0 }}>
+          <h2 style={{ fontFamily: 'Cinzel, serif', fontSize: '0.9rem', color: '#c9a227', margin: 0, flexShrink: 0 }}>
             Roll Initiative
           </h2>
-          <button
-            onClick={handleRollAll}
-            style={{
-              fontFamily: 'Cinzel, serif',
-              fontSize: '0.65rem',
-              padding: '4px 10px',
-              cursor: 'pointer',
-              background: 'rgba(201,162,39,0.2)',
-              color: '#c9a227',
-              border: '1px solid rgba(201,162,39,0.5)',
-              borderRadius: 2,
-            }}
-          >
-            Roll All
-          </button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {onRequestRolls && (
+              <button
+                onClick={onRequestRolls}
+                style={{
+                  fontFamily: 'Cinzel, serif',
+                  fontSize: '0.65rem',
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  background: 'rgba(100,50,200,0.2)',
+                  color: '#bb99ff',
+                  border: '1px solid rgba(150,100,255,0.5)',
+                  borderRadius: 2,
+                  marginRight: 4,
+                }}
+              >
+                Request Player Rolls
+              </button>
+            )}
+            <button
+              onClick={handleRollAll}
+              style={{
+                fontFamily: 'Cinzel, serif',
+                fontSize: '0.65rem',
+                padding: '4px 10px',
+                cursor: 'pointer',
+                background: 'rgba(201,162,39,0.2)',
+                color: '#c9a227',
+                border: '1px solid rgba(201,162,39,0.5)',
+                borderRadius: 2,
+              }}
+            >
+              Roll All
+            </button>
+          </div>
         </div>
 
         {/* Column headers */}
@@ -372,6 +413,29 @@ function InitiativeRollModal({
             );
           })}
 
+          {/* Player submissions panel */}
+          {playerSubmissions && playerSubmissions.length > 0 && (
+            <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(201,162,39,0.2)' }}>
+              <p style={{
+                fontFamily: 'Cinzel, serif', fontSize: '0.6rem',
+                color: 'rgba(201,162,39,0.6)', marginBottom: 6, letterSpacing: '0.1em',
+              }}>
+                PLAYER ROLLS
+              </p>
+              {playerSubmissions.map(ps => (
+                <div key={ps.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: ps.colour, flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: '#f4e4bc', flex: 1 }}>
+                    {ps.name}
+                  </span>
+                  <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.75rem', fontWeight: 700, color: '#c9a227' }}>
+                    {ps.total}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Add NPC row */}
           {showAddNpc && (
             <div style={{ padding: '8px 16px', display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -488,7 +552,7 @@ function InitiativeRollModal({
               borderRadius: 2,
             }}
           >
-            Set Initiative Order
+            Begin Combat
           </button>
         </div>
       </div>
@@ -512,45 +576,90 @@ export default function InitiativeTracker() {
   const isDM = useSessionStore((s) => s.isDM);
 
   const [showRollModal, setShowRollModal] = useState(false);
+  const [showPlayerModal, setShowPlayerModal] = useState(false);
+  const [submissions, setSubmissions] = useState<PlayerSubmission[]>([]);
 
-  // Auto-open roll modal when encounter is launched (DM only)
+  // Socket event listeners
   useEffect(() => {
-    if (!isDM) return;
     const socket = getSocket();
     if (!socket) return;
-    const onRequested = () => setShowRollModal(true);
-    socket.on('initiative:requested', onRequested);
-    return () => { socket.off('initiative:requested', onRequested); };
-  }, [isDM]);
 
-  const handleRollInitiative = () => {
-    setShowRollModal(true);
-  };
+    // DM only: open roll modal when encounter is launched via backend event
+    const onRequested = () => {
+      if (isDM) setShowRollModal(true);
+    };
+    socket.on('initiative:requested', onRequested);
+
+    // ALL clients: DM started the roll phase — players open their roll modal
+    const onRollRequest = () => {
+      if (!isDM) setShowPlayerModal(true);
+    };
+    socket.on('initiative:roll_request', onRollRequest);
+
+    // DM only: live update of submissions from players
+    const onSubmissionUpdate = (payload: { submissions: PlayerSubmission[] }) => {
+      if (isDM) setSubmissions(payload.submissions);
+    };
+    socket.on('initiative:submission_update', onSubmissionUpdate);
+
+    // ALL clients: final sorted initiative order from backend
+    const onReady = (sorted: unknown[]) => {
+      const combatants = (sorted as Array<Record<string, unknown>>).map((e) =>
+        makeCombatant({
+          id: (e.id as string) || generateId(),
+          tokenId: e.id as string,
+          name: e.name as string,
+          initiative: ((e.roll as number) ?? 0) + ((e.dexMod as number) ?? 0),
+          initiativeRoll: (e.roll as number) ?? 0,
+          dexMod: (e.dexMod as number) ?? 0,
+          hp: e.hp as number,
+          maxHp: e.maxHp as number,
+          ac: e.ac as number,
+          colour: e.colour as string,
+          isPlayer: (e.isPlayer as boolean) ?? false,
+          isEnemy: (e.isEnemy as boolean) ?? !(e.isPlayer as boolean),
+          surprised: (e.surprised as boolean) ?? false,
+          speed: (e.speed as number) ?? 30,
+        })
+      );
+      setInitiative(combatants);
+      setInCombat(true);
+      setRound(1);
+      setShowRollModal(false);
+      setShowPlayerModal(false);
+    };
+    socket.on('initiative:ready', onReady);
+
+    return () => {
+      socket.off('initiative:requested', onRequested);
+      socket.off('initiative:roll_request', onRollRequest);
+      socket.off('initiative:submission_update', onSubmissionUpdate);
+      socket.off('initiative:ready', onReady);
+    };
+  }, [isDM, setInitiative, setInCombat, setRound]);
+
+  const handleRollInitiative = () => setShowRollModal(true);
 
   const handleModalConfirm = (entries: RollEntry[]) => {
-    const combatants: Combatant[] = entries.map((e) =>
-      makeCombatant({
-        id: generateId(),
-        tokenId: e.id,
-        name: e.name,
-        initiative: (e.roll ?? 0) + e.dexMod,
-        initiativeRoll: e.roll ?? 0,
-        dexMod: e.dexMod,
-        hp: e.hp,
-        maxHp: e.maxHp,
-        ac: e.ac,
-        colour: e.colour,
-        isPlayer: e.isPlayer,
-        isEnemy: e.isEnemy,
-        surprised: e.surprised,
-        speed: e.speed,
-      })
-    );
-    const sorted = [...combatants].sort((a, b) => b.initiative - a.initiative);
-    setInitiative(sorted);
-    setInCombat(true);
-    setRound(1);
-    socketEmit.initiativeSet(sorted);
+    const combatantsPayload = entries.map((e) => ({
+      id: e.id,
+      name: e.name,
+      roll: e.roll ?? 0,
+      dexMod: e.dexMod,
+      hp: e.hp,
+      maxHp: e.maxHp,
+      ac: e.ac,
+      colour: e.colour,
+      isPlayer: e.isPlayer,
+      isEnemy: !e.isPlayer,
+      surprised: e.surprised,
+      speed: e.speed ?? 30,
+    }));
+    const socket = getSocket();
+    if (socket) {
+      // Backend sorts and broadcasts initiative:ready to all clients
+      socket.emit('initiative:finalize', { combatants: combatantsPayload });
+    }
     socketEmit.combatStart();
     setShowRollModal(false);
   };
@@ -564,7 +673,6 @@ export default function InitiativeTracker() {
   };
 
   const handleNextTurn = () => {
-    // Reset action economy for CURRENT combatant before advancing
     const current = initiative[currentTurnIndex];
     if (current) {
       updateCombatant(current.id, {
@@ -592,7 +700,6 @@ export default function InitiativeTracker() {
 
   const currentCombatant = initiative[currentTurnIndex];
 
-  // Map token list for roll modal
   const tokenList = tokens.map((t) => ({
     id: t.id,
     name: t.name,
@@ -768,15 +875,29 @@ export default function InitiativeTracker() {
         </div>
       )}
 
-      {/* Roll Initiative Modal */}
+      {/* Roll Initiative Modal (DM) */}
       {showRollModal && (
         <InitiativeRollModal
           tokens={tokenList}
+          playerSubmissions={submissions
+            .filter((s) => s.isPlayer)
+            .map((s) => ({ id: s.id, name: s.name, total: s.total, colour: s.colour }))}
+          onRequestRolls={() => {
+            const socket = getSocket();
+            if (!socket) return;
+            const monsters = tokenList.filter((t) => !t.isPlayer);
+            const playerCount = tokenList.filter((t) => t.isPlayer).length;
+            socket.emit('initiative:start_roll', { monsters, expectedPlayerCount: playerCount });
+          }}
           onConfirm={handleModalConfirm}
           onCancel={() => setShowRollModal(false)}
         />
       )}
+
+      {/* Player initiative roll modal */}
+      {showPlayerModal && (
+        <PlayerInitiativeModal onClose={() => setShowPlayerModal(false)} />
+      )}
     </div>
   );
 }
-
