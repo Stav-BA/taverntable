@@ -8,6 +8,12 @@ interface SocketWithMeta extends Socket {
   _playerId?: string;
 }
 
+// Module-level pending initiative state (ephemeral, lost on server restart — acceptable)
+const pendingInitiative = new Map<string, {
+  submissions: Map<string, { id: string; name: string; roll: number; dexMod: number; total: number; isMonster: boolean; hp: number; maxHp: number; ac: number; colour: string; isPlayer: boolean; speed?: number }>;
+  expectedPlayerCount: number;
+}>();
+
 export function registerGameHandlers(io: Server, socket: Socket): void {
   const s = socket as SocketWithMeta;
 
@@ -155,6 +161,75 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       io.to(sessionId).emit('initiative:updated', payload);
     } catch (err) {
       console.error('[initiative:update]', err);
+    }
+  });
+
+  // ── Initiative: start roll phase ────────────────────────────────────────────
+  // DM sends: { monsters: Array<{id,name,dexMod,hp,maxHp,ac,colour}>, expectedPlayerCount: number }
+  // Backend broadcasts roll request to all clients, tracks pending submissions
+  socket.on('initiative:start_roll', async (payload: {
+    monsters: Array<{id: string; name: string; dexMod: number; hp: number; maxHp: number; ac: number; colour: string}>;
+    expectedPlayerCount: number;
+  }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      // Store pending state in module-level map
+      pendingInitiative.set(sessionId, {
+        submissions: new Map(),
+        expectedPlayerCount: payload.expectedPlayerCount,
+      });
+      // Tell all clients to open their initiative roll UI
+      // DM gets the monster list; players just need to know it's time to roll
+      io.to(sessionId).emit('initiative:roll_request', {
+        monsters: payload.monsters,
+        expectedPlayerCount: payload.expectedPlayerCount,
+      });
+    } catch (err) {
+      console.error('[initiative:start_roll]', err);
+    }
+  });
+
+  // ── Initiative: submit a single roll ────────────────────────────────────────
+  // Any client sends their roll. DM sends multiple (one per monster + possibly players).
+  // payload: { id, name, roll, dexMod, isMonster, hp, maxHp, ac, colour, isPlayer, speed? }
+  socket.on('initiative:submit', async (payload: {
+    id: string; name: string; roll: number; dexMod: number;
+    isMonster: boolean; hp: number; maxHp: number; ac: number;
+    colour: string; isPlayer: boolean; speed?: number;
+  }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      let state = pendingInitiative.get(sessionId);
+      if (!state) {
+        // If no state yet (DM submitted before starting), create one
+        state = { submissions: new Map(), expectedPlayerCount: 0 };
+        pendingInitiative.set(sessionId, state);
+      }
+      state.submissions.set(payload.id, { ...payload, total: payload.roll + payload.dexMod });
+      // Broadcast update to DM so they can see incoming player rolls in real time
+      io.to(sessionId).emit('initiative:submission_update', {
+        submissions: Array.from(state.submissions.values()),
+      });
+    } catch (err) {
+      console.error('[initiative:submit]', err);
+    }
+  });
+
+  // ── Initiative: finalize — DM confirms, backend sorts and emits ──────────────
+  socket.on('initiative:finalize', async (payload: { combatants: Array<{id: string; name: string; roll: number; dexMod: number; hp: number; maxHp: number; ac: number; colour: string; isPlayer: boolean; speed?: number; isEnemy?: boolean; surprised?: boolean}> }) => {
+    try {
+      const sessionId = s._sessionId;
+      if (!sessionId) return;
+      // Sort descending by roll+dexMod
+      const sorted = [...payload.combatants].sort((a, b) => (b.roll + b.dexMod) - (a.roll + a.dexMod));
+      // Clear pending state
+      pendingInitiative.delete(sessionId);
+      // Emit the sorted list as the final initiative order (same event the old flow used)
+      io.to(sessionId).emit('initiative:ready', sorted);
+    } catch (err) {
+      console.error('[initiative:finalize]', err);
     }
   });
 
