@@ -331,6 +331,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       targetAC: number;
       hit: boolean;
       isCrit: boolean;
+      isFumble: boolean;
       damageTotal: number;
       damageType: string;
       newTargetHp: number;
@@ -340,7 +341,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
         const sessionId = payload.sessionId ?? s._sessionId;
         if (!sessionId) return;
 
-        const { attackerName, targetName, actionName, roll, attackBonus, total, targetAC, hit, isCrit, damageTotal, damageType, newTargetHp, newTargetConditions, targetId } = payload;
+        const { attackerName, targetName, actionName, roll, attackBonus, total, targetAC, hit, isCrit, isFumble, damageTotal, damageType, newTargetHp, newTargetConditions, targetId } = payload;
 
         // Apply HP update to Redis game state
         const state = await import('../../redis/sessionState').then((m) => m.getGameState(sessionId));
@@ -359,10 +360,12 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
         });
 
         // Build and broadcast chat message
-        const hitLabel = isCrit ? '💥 CRITICAL HIT' : hit ? '✓ HIT' : '✗ MISS';
+        const hitLabel = isCrit ? '⚡ CRITICAL HIT' : isFumble ? '💥 FUMBLE (Natural 1)' : hit ? '✓ HIT' : '✗ MISS';
+        const rollDisplay = isCrit || isFumble ? `Natural ${roll}!` : `d20: ${roll}+${attackBonus}=${total} vs AC ${targetAC}`;
         const damageText = hit ? ` for **${damageTotal}** ${damageType} damage` : '';
+        const critText = isCrit ? ' *(double damage dice)*' : '';
         const fallText = newTargetHp <= 0 && hit ? ` ☠️ ${targetName} falls!` : '';
-        const text = `⚔️ ${attackerName} attacks ${targetName} with ${actionName} (d20: ${roll}+${attackBonus}=${total} vs AC ${targetAC}) → **${hitLabel}**${damageText}${fallText}`;
+        const text = `⚔️ ${attackerName} attacks ${targetName} with ${actionName} (${rollDisplay}) → **${hitLabel}**${damageText}${critText}${fallText}`;
 
         io.to(sessionId).emit('chat:message', {
           id: `combat-${Date.now()}`,
@@ -372,6 +375,48 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
         });
       } catch (err) {
         console.error('[combat:attack]', err);
+      }
+    },
+  );
+
+  // ── Combat: non-attack action broadcast ───────────────────────────────────
+  socket.on(
+    'combat:action',
+    async (payload: { sessionId: string; actorName: string; actionName: string; description: string }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+        const { actorName, actionName, description } = payload;
+        const text = `🎭 ${actorName} uses **${actionName}** — ${description}`;
+        io.to(sessionId).emit('chat:message', {
+          id: `action-${Date.now()}`,
+          type: 'system',
+          text,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.error('[combat:action]', err);
+      }
+    },
+  );
+
+  // ── Combat: fumble consequence announced by DM ─────────────────────────────
+  socket.on(
+    'combat:fumble',
+    async (payload: { sessionId: string; attackerName: string; consequence: string }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+        const { attackerName, consequence } = payload;
+        const text = `💥 **FUMBLE!** ${attackerName} rolled a Natural 1 — DM ruling: *${consequence}*`;
+        io.to(sessionId).emit('chat:message', {
+          id: `fumble-${Date.now()}`,
+          type: 'system',
+          text,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.error('[combat:fumble]', err);
       }
     },
   );

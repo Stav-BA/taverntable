@@ -17,6 +17,30 @@ interface Props {
   onEndTurn?: () => void;
 }
 
+type CombatStep = 'choose-action' | 'choose-weapon' | 'pick-target' | 'result' | 'done';
+
+interface WeaponOption {
+  name: string;
+  attackBonus: number;
+  damageDice: string;
+  damageType: string;
+}
+
+interface AttackResult {
+  d20Roll: number;
+  attackBonus: number;
+  total: number;
+  targetAC: number;
+  hit: boolean;
+  isCrit: boolean;
+  isFumble: boolean;
+  damageRolls: number[];
+  damageTotal: number;
+  damageType: string;
+  actionName: string;
+  targetName: string;
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CONDITION_ICONS: Record<string, string> = {
@@ -36,9 +60,13 @@ const CONDITION_ICONS: Record<string, string> = {
   unconscious: '💀',
 };
 
-const DAMAGE_TYPES = [
-  'slashing', 'piercing', 'bludgeoning', 'fire', 'cold', 'lightning',
-  'poison', 'acid', 'radiant', 'necrotic', 'psychic', 'thunder', 'force',
+const FUMBLE_OPTIONS = [
+  'No effect — just a miss',
+  'Drop weapon (falls 5ft away)',
+  'Hit an ally (roll damage against nearest ally)',
+  'Stumble — lose Bonus Action this turn',
+  'Overextend — grant Advantage to next attack against you',
+  'Weapon breaks (unusable until repaired)',
 ];
 
 // ── Dice helpers ───────────────────────────────────────────────────────────────
@@ -49,7 +77,7 @@ function rollD20(): number {
 
 function rollNotation(notation: string, doubleDice = false): { rolls: number[]; total: number } {
   const m = notation.match(/^(\d+)d(\d+)([+-]\d+)?$/i);
-  if (!m) return { rolls: [], total: 0 };
+  if (!m) return { rolls: [0], total: 0 };
   let count = parseInt(m[1]);
   const sides = parseInt(m[2]);
   const bonus = m[3] ? parseInt(m[3]) : 0;
@@ -57,8 +85,6 @@ function rollNotation(notation: string, doubleDice = false): { rolls: number[]; 
   const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
   return { rolls, total: rolls.reduce((a, b) => a + b, 0) + bonus };
 }
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function getInitials(name: string): string {
   return name
@@ -123,101 +149,46 @@ function ActionToggleBtn({ label, used, onClick }: { label: string; used: boolea
   );
 }
 
-// ── Attack Result Bubble ────────────────────────────────────────────────────────
+// ── Step breadcrumb ────────────────────────────────────────────────────────────
 
-interface AttackResult {
-  d20Roll: number;
-  attackBonus: number;
-  total: number;
-  targetAC: number;
-  hit: boolean;
-  isCrit: boolean;
-  isMiss: boolean;
-  damageRolls: number[];
-  damageTotal: number;
-  damageType: string;
-  actionName: string;
-}
-
-function AttackResultBubble({ result, onDismiss }: { result: AttackResult; onDismiss: () => void }) {
-  const hitLabel = result.isCrit ? 'CRIT!' : result.isMiss ? 'MISS' : result.hit ? 'HIT' : 'MISS';
-  const hitColour = result.isCrit ? '#f4c842' : result.hit ? '#2d8a2d' : '#8b1a1a';
+function StepBreadcrumb({ step }: { step: CombatStep }) {
+  const steps: { key: CombatStep; label: string }[] = [
+    { key: 'choose-action', label: 'Action' },
+    { key: 'choose-weapon', label: 'Weapon' },
+    { key: 'pick-target', label: 'Roll' },
+    { key: 'result', label: 'Result' },
+  ];
+  const activeIdx = steps.findIndex((s) => s.key === step);
+  if (activeIdx < 0) return null;
   return (
-    <div style={{
-      background: 'rgba(26,15,0,0.97)', border: `1px solid ${hitColour}`,
-      borderRadius: 6, padding: '10px 14px', marginTop: 6,
-      boxShadow: `0 0 18px ${hitColour}44`, position: 'relative',
-    }}>
-      <button
-        onClick={onDismiss}
-        style={{
-          position: 'absolute', top: 4, right: 6, background: 'transparent',
-          border: 'none', color: 'rgba(244,228,188,0.4)', cursor: 'pointer', fontSize: '0.7rem',
-        }}
-      >
-        x
-      </button>
-      <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: 'rgba(244,228,188,0.6)', marginBottom: 4 }}>
-        {result.actionName}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <span style={{
-          fontSize: '1.4rem', fontWeight: 700, fontFamily: 'Cinzel, serif',
-          color: result.d20Roll === 20 ? '#f4c842' : result.d20Roll === 1 ? '#8b1a1a' : '#f4e4bc',
-        }}>
-          {result.d20Roll}
-        </span>
-        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.75rem', color: 'rgba(244,228,188,0.5)' }}>
-          {result.attackBonus >= 0 ? `+${result.attackBonus}` : result.attackBonus}
-        </span>
-        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.7rem', color: 'rgba(244,228,188,0.4)' }}>=</span>
-        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '1rem', fontWeight: 700, color: '#f4e4bc' }}>
-          {result.total}
-        </span>
-        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: 'rgba(244,228,188,0.4)' }}>
-          vs AC {result.targetAC}
-        </span>
-        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.85rem', fontWeight: 700, color: hitColour, marginLeft: 'auto' }}>
-          {hitLabel}
-        </span>
-      </div>
-      {(result.hit || result.isCrit) && (
-        <div style={{ borderTop: '1px solid rgba(201,162,39,0.2)', paddingTop: 6 }}>
-          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.5)' }}>
-            Damage: [{result.damageRolls.join(', ')}] ={' '}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+      {steps.map((s, i) => (
+        <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{
+            fontFamily: 'Cinzel, serif', fontSize: '0.57rem',
+            color: i === activeIdx ? '#c9a227' : i < activeIdx ? 'rgba(201,162,39,0.35)' : 'rgba(244,228,188,0.2)',
+            fontWeight: i === activeIdx ? 700 : 400,
+          }}>
+            {s.label}
           </span>
-          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.85rem', fontWeight: 700, color: hitColour }}>
-            {result.damageTotal}
-          </span>
-          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.4)', marginLeft: 4 }}>
-            {result.damageType}
-          </span>
-          {result.isCrit && (
-            <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: '#f4c842', marginLeft: 6 }}>
-              (double dice!)
-            </span>
+          {i < steps.length - 1 && (
+            <span style={{ color: 'rgba(201,162,39,0.2)', fontSize: '0.5rem' }}>›</span>
           )}
         </div>
-      )}
+      ))}
     </div>
   );
 }
 
 // ── Target Picker ──────────────────────────────────────────────────────────────
 
-function TargetPicker({
-  targets, selectedId, onSelect,
-}: {
+function TargetPicker({ targets, selectedId, onSelect }: {
   targets: Combatant[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
   if (targets.length === 0) {
-    return (
-      <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.4)', padding: '4px 0' }}>
-        No valid targets
-      </div>
-    );
+    return <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.4)', padding: '4px 0' }}>No valid targets</div>;
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -248,6 +219,143 @@ function TargetPicker({
   );
 }
 
+// ── Attack Result Bubble ────────────────────────────────────────────────────────
+
+function AttackResultBubble({ result, isDM, fumbleChoice, onFumbleChange, onFumbleSend, onDismiss }: {
+  result: AttackResult;
+  isDM: boolean;
+  fumbleChoice: string;
+  onFumbleChange: (v: string) => void;
+  onFumbleSend: () => void;
+  onDismiss: () => void;
+}) {
+  let hitLabel: string;
+  let hitColour: string;
+  if (result.isCrit) { hitLabel = '⚡ CRITICAL HIT!'; hitColour = '#f4c842'; }
+  else if (result.isFumble) { hitLabel = '💥 FUMBLE!'; hitColour = '#cc2222'; }
+  else if (result.hit) { hitLabel = '✓ HIT'; hitColour = '#2d8a2d'; }
+  else { hitLabel = '✗ MISS'; hitColour = '#8b1a1a'; }
+
+  return (
+    <div style={{
+      background: 'rgba(10,6,0,0.98)', border: `2px solid ${hitColour}`,
+      borderRadius: 8, padding: '12px 14px', marginTop: 4,
+      boxShadow: `0 0 28px ${hitColour}44`, position: 'relative',
+    }}>
+      <button
+        onClick={onDismiss}
+        style={{
+          position: 'absolute', top: 5, right: 8, background: 'transparent',
+          border: 'none', color: 'rgba(244,228,188,0.35)', cursor: 'pointer', fontSize: '0.75rem',
+        }}
+      >
+        ✕
+      </button>
+
+      {/* Action + target */}
+      <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.62rem', color: 'rgba(244,228,188,0.5)', marginBottom: 8 }}>
+        {result.actionName} → {result.targetName}
+      </div>
+
+      {/* Roll row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        {/* d20 badge */}
+        <div style={{
+          width: 44, height: 44, borderRadius: 8,
+          background: result.d20Roll === 20 ? 'rgba(244,200,66,0.2)' : result.d20Roll === 1 ? 'rgba(139,26,26,0.35)' : 'rgba(45,27,0,0.8)',
+          border: `2px solid ${result.d20Roll === 20 ? '#f4c842' : result.d20Roll === 1 ? '#cc2222' : 'rgba(201,162,39,0.4)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          boxShadow: result.d20Roll === 20 ? '0 0 14px #f4c84266' : result.d20Roll === 1 ? '0 0 14px #cc222266' : 'none',
+        }}>
+          <span style={{
+            fontFamily: 'Cinzel, serif', fontWeight: 900, fontSize: '1.2rem',
+            color: result.d20Roll === 20 ? '#f4c842' : result.d20Roll === 1 ? '#ff5555' : '#f4e4bc',
+          }}>
+            {result.d20Roll}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {!result.isCrit && !result.isFumble && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.7rem', color: 'rgba(244,228,188,0.5)' }}>
+                {result.attackBonus >= 0 ? `+${result.attackBonus}` : result.attackBonus}
+              </span>
+              <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.35)' }}>=</span>
+              <span style={{ fontFamily: 'Cinzel, serif', fontSize: '1rem', fontWeight: 700, color: '#f4e4bc' }}>
+                {result.total}
+              </span>
+              <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.4)' }}>
+                vs AC {result.targetAC}
+              </span>
+            </div>
+          )}
+          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.85rem', fontWeight: 800, color: hitColour, letterSpacing: '0.04em' }}>
+            {hitLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Damage */}
+      {(result.hit || result.isCrit) && result.damageRolls.length > 0 && (
+        <div style={{
+          borderTop: '1px solid rgba(201,162,39,0.2)', paddingTop: 8,
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+        }}>
+          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.45)' }}>
+            [{result.damageRolls.join(' + ')}] =
+          </span>
+          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '1.1rem', fontWeight: 900, color: hitColour }}>
+            {result.damageTotal}
+          </span>
+          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.4)' }}>
+            {result.damageType}
+          </span>
+          {result.isCrit && (
+            <span style={{
+              fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: '#f4c842',
+              background: 'rgba(244,200,66,0.12)', padding: '1px 6px', borderRadius: 2, border: '1px solid rgba(244,200,66,0.3)',
+            }}>
+              double dice
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Fumble consequence picker — DM only */}
+      {result.isFumble && isDM && (
+        <div style={{ borderTop: '1px solid rgba(204,34,34,0.35)', paddingTop: 8, marginTop: 8 }}>
+          <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.62rem', color: 'rgba(244,228,188,0.6)', marginBottom: 5 }}>
+            ⚠️ DM — Choose fumble consequence:
+          </div>
+          <select
+            value={fumbleChoice}
+            onChange={(e) => onFumbleChange(e.target.value)}
+            style={{
+              width: '100%', background: 'rgba(20,8,0,0.95)', border: '1px solid rgba(204,34,34,0.5)',
+              borderRadius: 3, color: '#f4e4bc', fontFamily: 'Cinzel, serif', fontSize: '0.62rem',
+              padding: '4px 6px', marginBottom: 6,
+            }}
+          >
+            {FUMBLE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <button
+            onClick={onFumbleSend}
+            style={{
+              width: '100%', fontFamily: 'Cinzel, serif', fontSize: '0.65rem', fontWeight: 700,
+              padding: '5px 8px', cursor: 'pointer',
+              background: 'rgba(139,26,26,0.65)', color: '#f4e4bc',
+              border: '1px solid rgba(204,34,34,0.7)', borderRadius: 3,
+            }}
+          >
+            💥 Announce Consequence
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTurn }: Props) {
@@ -259,7 +367,7 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
   const sheets = useCharacterStore((s) => s.sheets);
 
   const isMyToken = !isDM && player != null && combatant.isPlayer && combatant.tokenId === player.id;
-  const canEndTurn = isDM || isMyToken;
+  const canControl = isDM || isMyToken;
   const isDead = combatant.hp <= 0;
 
   // Monster lookup
@@ -271,50 +379,77 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
   // Character sheet for player
   const sheet = !isMonster && player ? sheets[player.id] : undefined;
 
-  // Attack panel state
-  const [selectedMonsterAction, setSelectedMonsterAction] = useState<{
-    name: string;
-    attackBonus: number;
-    damageDice: string;
-    damageType: string;
-  } | null>(null);
-
-  const [customAttackBonus, setCustomAttackBonus] = useState(0);
-  const [customDamageDice, setCustomDamageDice] = useState('1d6');
-  const [customDamageType, setCustomDamageType] = useState('slashing');
-  const [customActionName, setCustomActionName] = useState('Attack');
+  // ── Combat step machine ──────────────────────────────────────────────────────
+  const [combatStep, setCombatStep] = useState<CombatStep>('choose-action');
+  const [selectedWeapon, setSelectedWeapon] = useState<WeaponOption | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [attackResult, setAttackResult] = useState<AttackResult | null>(null);
+  const [fumbleChoice, setFumbleChoice] = useState(FUMBLE_OPTIONS[0]);
+  const [nonAttackNote, setNonAttackNote] = useState<string | null>(null);
 
-  // Auto-fill weapon from equipped gear
+  // Reset when turn becomes active
   useEffect(() => {
-    if (!isMonster && sheet) {
-      const strMod = abilityMod(sheet.str);
-      const dexMod = abilityMod(sheet.dex);
-      const prof = proficiencyBonus(sheet.level);
-      const equippedWeapon = sheet.equipment?.find((e) => e.equipped && e.weaponId);
-      if (equippedWeapon?.weaponId) {
-        const weaponDef = getWeaponById(equippedWeapon.weaponId);
-        if (weaponDef) {
-          const atk = calcWeaponAttackBonus(weaponDef, strMod, dexMod, prof);
-          setCustomAttackBonus(atk);
-          setCustomDamageDice(weaponDef.damageDice);
-          setCustomDamageType(weaponDef.damageType);
-          setCustomActionName(weaponDef.name);
-          return;
-        }
-      }
-      setCustomAttackBonus(strMod + prof);
+    if (isCurrentTurn) {
+      setCombatStep('choose-action');
+      setSelectedWeapon(null);
+      setSelectedTargetId(null);
+      setAttackResult(null);
+      setFumbleChoice(FUMBLE_OPTIONS[0]);
+      setNonAttackNote(null);
     }
-  }, [sheet, isMonster]);
+  }, [isCurrentTurn]);
 
-  // Valid targets: alive opposing side
+  // Build weapon options for players
+  const playerWeapons: WeaponOption[] = [];
+  if (!isMonster && sheet) {
+    const strMod = abilityMod(sheet.str);
+    const dexMod = abilityMod(sheet.dex);
+    const prof = proficiencyBonus(sheet.level);
+    const weaponItems = sheet.equipment?.filter((e) => e.weaponId) ?? [];
+    weaponItems.forEach((item) => {
+      const def = item.weaponId ? getWeaponById(item.weaponId) : null;
+      if (def) {
+        const atk = calcWeaponAttackBonus(def, strMod, dexMod, prof);
+        playerWeapons.push({
+          name: def.name + (item.equipped ? ' ✓' : ''),
+          attackBonus: atk,
+          damageDice: def.damageDice,
+          damageType: def.damageType,
+        });
+      }
+    });
+    if (playerWeapons.length === 0) {
+      playerWeapons.push({ name: 'Unarmed Strike', attackBonus: strMod + prof, damageDice: '1d4', damageType: 'bludgeoning' });
+    }
+  }
+
+  // Monster attack options
+  const monsterWeapons: WeaponOption[] = isMonster && monsterDef
+    ? monsterDef.actions
+        .filter((a) => a.attackBonus != null || a.damageDice != null)
+        .map((a) => ({
+          name: a.name,
+          attackBonus: a.attackBonus ?? 0,
+          damageDice: a.damageDice ?? '1d4',
+          damageType: a.damageType ?? 'bludgeoning',
+        }))
+    : [];
+
+  const availableWeapons = isMonster ? monsterWeapons : playerWeapons;
+
+  // Valid targets
   const targets = initiative.filter((c) => {
     if (c.hp <= 0) return false;
     if (c.id === combatant.id) return false;
-    if (combatant.isEnemy) return !c.isEnemy;
-    return c.isEnemy;
+    return combatant.isEnemy ? !c.isEnemy : c.isEnemy;
   });
+
+  // ── HP manual adjust (DM) ────────────────────────────────────────────────────
+  const handleHpChange = (delta: number) => {
+    const newHp = Math.max(0, Math.min(combatant.maxHp, combatant.hp + delta));
+    updateCombatant(combatant.id, { hp: newHp });
+    socketEmit.initiativeUpdate(combatant.id, { hp: newHp });
+  };
 
   const markAction = (field: 'actionUsed' | 'bonusActionUsed' | 'reactionUsed') => {
     const val = !combatant[field];
@@ -322,47 +457,46 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
     socketEmit.initiativeUpdate(combatant.id, { [field]: val });
   };
 
-  const handleHpChange = (delta: number) => {
-    const newHp = Math.max(0, Math.min(combatant.maxHp, combatant.hp + delta));
-    updateCombatant(combatant.id, { hp: newHp });
-    socketEmit.initiativeUpdate(combatant.id, { hp: newHp });
+  // ── Non-attack action ────────────────────────────────────────────────────────
+  const handleNonAttackAction = (label: string, note: string) => {
+    setNonAttackNote(note);
+    setCombatStep('done');
+    updateCombatant(combatant.id, { actionUsed: true });
+    socketEmit.initiativeUpdate(combatant.id, { actionUsed: true });
+    getSocket().emit('combat:action', { sessionId, actorName: combatant.name, actionName: label, description: note });
   };
 
-  // Resolve active attack parameters
-  const activeAttack = isMonster && selectedMonsterAction
-    ? selectedMonsterAction
-    : !isMonster
-    ? { name: customActionName, attackBonus: customAttackBonus, damageDice: customDamageDice, damageType: customDamageType }
-    : null;
-
+  // ── Roll attack ──────────────────────────────────────────────────────────────
   const handleRollAttack = () => {
-    if (!activeAttack) return;
+    if (!selectedWeapon || !selectedTargetId) return;
     const target = initiative.find((c) => c.id === selectedTargetId);
     if (!target) return;
 
     const d20 = rollD20();
     const isCrit = d20 === 20;
-    const isMiss = d20 === 1;
-    const total = d20 + activeAttack.attackBonus;
-    const hit = !isMiss && (isCrit || total >= target.ac);
+    const isFumble = d20 === 1;
+    const total = d20 + selectedWeapon.attackBonus;
+    const hit = !isFumble && (isCrit || total >= target.ac);
 
     let damageRolls: number[] = [];
     let damageTotal = 0;
-
     if (hit) {
-      const dmgResult = rollNotation(activeAttack.damageDice, isCrit);
-      damageRolls = dmgResult.rolls;
-      damageTotal = dmgResult.total;
+      const dmg = rollNotation(selectedWeapon.damageDice, isCrit);
+      damageRolls = dmg.rolls;
+      damageTotal = dmg.total;
     }
 
+    const cleanName = selectedWeapon.name.replace(' ✓', '');
     const result: AttackResult = {
-      d20Roll: d20, attackBonus: activeAttack.attackBonus, total,
-      targetAC: target.ac, hit, isCrit, isMiss,
-      damageRolls, damageTotal, damageType: activeAttack.damageType, actionName: activeAttack.name,
+      d20Roll: d20, attackBonus: selectedWeapon.attackBonus, total,
+      targetAC: target.ac, hit, isCrit, isFumble,
+      damageRolls, damageTotal, damageType: selectedWeapon.damageType,
+      actionName: cleanName, targetName: target.name,
     };
     setAttackResult(result);
+    setCombatStep('result');
 
-    // Update target HP and conditions
+    // Apply damage
     const newConditions = [...target.conditions];
     let newHp = target.hp;
     if (hit) {
@@ -374,34 +508,35 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
       socketEmit.initiativeUpdate(target.id, { hp: newHp, conditions: newConditions });
     }
 
-    // Mark attacker action used
+    // Mark action used
     updateCombatant(combatant.id, { actionUsed: true });
     socketEmit.initiativeUpdate(combatant.id, { actionUsed: true });
 
-    // Broadcast combat:attack (backend generates the chat message)
+    // Tell backend (backend generates chat message)
     getSocket().emit('combat:attack', {
       sessionId,
       attackerName: combatant.name,
       targetId: target.id,
       targetName: target.name,
-      actionName: activeAttack.name,
-      roll: d20,
-      attackBonus: activeAttack.attackBonus,
-      total,
-      targetAC: target.ac,
-      hit,
-      isCrit,
-      damageTotal,
-      damageType: activeAttack.damageType,
-      newTargetHp: newHp,
-      newTargetConditions: newConditions,
+      actionName: cleanName,
+      roll: d20, attackBonus: selectedWeapon.attackBonus, total,
+      targetAC: target.ac, hit, isCrit, isFumble,
+      damageTotal, damageType: selectedWeapon.damageType,
+      newTargetHp: newHp, newTargetConditions: newConditions,
     });
   };
 
-  const showAttackPanel = isCurrentTurn && !combatant.actionUsed && (isDM || isMyToken);
-  const canRoll = activeAttack != null && selectedTargetId != null;
-  const colourHex = combatant.colour;
+  const handleFumbleSend = () => {
+    getSocket().emit('combat:fumble', {
+      sessionId,
+      attackerName: combatant.name,
+      consequence: fumbleChoice,
+    });
+  };
 
+  const showControls = isCurrentTurn && canControl && !isDead;
+
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div
       style={{
@@ -416,21 +551,16 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
     >
       {/* ── Main row ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px' }}>
-        {/* Turn indicator */}
         <div style={{ flexShrink: 0, width: 16, textAlign: 'center' }}>
-          {isCurrentTurn ? (
-            <span style={{ color: '#c9a227', fontSize: '0.65rem' }}>&#9654;</span>
-          ) : (
-            <span style={{ color: 'rgba(244,228,188,0.3)', fontFamily: 'Cinzel, serif', fontSize: '0.6rem' }}>
-              {index + 1}
-            </span>
-          )}
+          {isCurrentTurn
+            ? <span style={{ color: '#c9a227', fontSize: '0.65rem' }}>&#9654;</span>
+            : <span style={{ color: 'rgba(244,228,188,0.3)', fontFamily: 'Cinzel, serif', fontSize: '0.6rem' }}>{index + 1}</span>
+          }
         </div>
 
-        {/* Colour circle */}
         <div style={{
-          width: 24, height: 24, borderRadius: '50%', background: colourHex,
-          boxShadow: isCurrentTurn ? `0 0 8px ${colourHex}` : undefined,
+          width: 24, height: 24, borderRadius: '50%', background: combatant.colour,
+          boxShadow: isCurrentTurn ? `0 0 8px ${combatant.colour}` : undefined,
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
           <span style={{ fontSize: '0.5rem', fontWeight: 700, color: '#fff', fontFamily: 'Cinzel, serif' }}>
@@ -438,7 +568,6 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
           </span>
         </div>
 
-        {/* Name + HP + conditions */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <p style={{
@@ -454,20 +583,17 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
           {combatant.conditions.length > 0 && (
             <div style={{ display: 'flex', gap: 2, marginTop: 2 }}>
               {combatant.conditions.slice(0, 5).map((c) => (
-                <span key={c} title={c} style={{ fontSize: '0.6rem', lineHeight: 1 }}>
-                  {CONDITION_ICONS[c] ?? '?'}
-                </span>
+                <span key={c} title={c} style={{ fontSize: '0.6rem', lineHeight: 1 }}>{CONDITION_ICONS[c] ?? '?'}</span>
               ))}
             </div>
           )}
         </div>
 
-        {/* Right: initiative + AC + badges */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.7rem', fontWeight: 700, color: '#c9a227', minWidth: 20, textAlign: 'center' }} title="Initiative">
+          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.7rem', fontWeight: 700, color: '#c9a227', minWidth: 20, textAlign: 'center' }}>
             {combatant.initiative}
           </span>
-          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.6)' }} title="Armour Class">
+          <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: 'rgba(244,228,188,0.6)' }}>
             AC {combatant.ac}
           </span>
           <div style={{ display: 'flex', gap: 2 }}>
@@ -478,13 +604,11 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
         </div>
       </div>
 
-      {/* ── Expanded turn controls ────────────────────────────────────────────── */}
+      {/* ── Expanded controls ─────────────────────────────────────────────────── */}
       {isCurrentTurn && (
-        <div style={{
-          padding: '4px 10px 8px', borderTop: '1px solid rgba(201,162,39,0.15)',
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          {/* Action economy toggles (DM only) */}
+        <div style={{ padding: '4px 10px 8px', borderTop: '1px solid rgba(201,162,39,0.15)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+          {/* DM action economy toggles */}
           {isDM && (
             <div style={{ display: 'flex', gap: 3 }}>
               <ActionToggleBtn label="Action" used={combatant.actionUsed} onClick={() => markAction('actionUsed')} />
@@ -493,178 +617,205 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
             </div>
           )}
 
-          {/* HP adjustment (DM only) */}
+          {/* DM HP adjustment */}
           {isDM && (
             <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
               <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.55rem', color: 'rgba(201,162,39,0.6)', marginRight: 2 }}>HP</span>
-              {[-5, -1, 1, 5].map((delta) => (
-                <button
-                  key={delta}
-                  onClick={() => handleHpChange(delta)}
-                  style={{
-                    width: 28, height: 20, fontSize: '0.6rem', fontFamily: 'Cinzel, serif', fontWeight: 700,
-                    cursor: 'pointer',
-                    background: delta < 0 ? 'rgba(139,26,26,0.5)' : 'rgba(45,80,22,0.5)',
-                    color: '#f4e4bc',
-                    border: `1px solid ${delta < 0 ? 'rgba(139,26,26,0.7)' : 'rgba(45,80,22,0.7)'}`,
-                    borderRadius: 2,
-                  }}
-                >
-                  {delta > 0 ? `+${delta}` : delta}
+              {[-10, -5, -1, 1, 5, 10].map((d) => (
+                <button key={d} onClick={() => handleHpChange(d)} style={{
+                  width: 28, height: 20, fontSize: '0.6rem', fontFamily: 'Cinzel, serif', fontWeight: 700,
+                  cursor: 'pointer',
+                  background: d < 0 ? 'rgba(139,26,26,0.5)' : 'rgba(45,80,22,0.5)',
+                  color: '#f4e4bc',
+                  border: `1px solid ${d < 0 ? 'rgba(139,26,26,0.7)' : 'rgba(45,80,22,0.7)'}`,
+                  borderRadius: 2,
+                }}>
+                  {d > 0 ? `+${d}` : d}
                 </button>
               ))}
             </div>
           )}
 
-          {/* ── Attack Panel ──────────────────────────────────────────────────── */}
-          {showAttackPanel && (
+          {/* ── COMBAT WIZARD ─────────────────────────────────────────────────── */}
+          {showControls && (
             <div style={{
-              background: 'rgba(45,27,0,0.6)', border: '1px solid rgba(201,162,39,0.3)',
-              borderRadius: 4, padding: '8px',
+              background: 'rgba(18,10,0,0.8)', border: '1px solid rgba(201,162,39,0.22)',
+              borderRadius: 6, padding: '10px',
             }}>
-              <div style={{
-                fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: '#c9a227',
-                marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em',
-              }}>
-                Attack
-              </div>
+              <StepBreadcrumb step={combatStep} />
 
-              {/* Monster action cards */}
-              {isMonster && monsterDef && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-                  {monsterDef.actions
-                    .filter((a) => a.attackBonus != null || a.damageDice != null)
-                    .map((a) => {
-                      const atkBonus = a.attackBonus ?? 0;
-                      const dmgDice = a.damageDice ?? '1d4';
-                      const dmgType = a.damageType ?? 'bludgeoning';
-                      const isSelected = selectedMonsterAction?.name === a.name;
-                      return (
-                        <button
-                          key={a.name}
-                          onClick={() =>
-                            setSelectedMonsterAction(
-                              isSelected ? null : { name: a.name, attackBonus: atkBonus, damageDice: dmgDice, damageType: dmgType }
-                            )
+              {/* STEP 1 — Choose action */}
+              {combatStep === 'choose-action' && !combatant.actionUsed && (
+                <div>
+                  <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.45)', marginBottom: 7, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                    Choose your action
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+                    {[
+                      { icon: '⚔️', label: 'Attack', desc: 'Make a weapon attack', primary: true },
+                      { icon: '🏃', label: 'Dash', desc: 'Double movement speed' },
+                      { icon: '🛡️', label: 'Dodge', desc: 'Attacks against you: disadvantage' },
+                      { icon: '🙏', label: 'Help', desc: 'Ally gets advantage on next roll' },
+                      { icon: '🔮', label: 'Cast Spell', desc: 'Expend a spell slot' },
+                      { icon: '🎲', label: 'Other', desc: 'Describe action in chat' },
+                    ].map(({ icon, label, desc, primary }) => (
+                      <button
+                        key={label}
+                        onClick={() => {
+                          if (label === 'Attack') {
+                            setCombatStep('choose-weapon');
+                          } else {
+                            handleNonAttackAction(label, `${icon} ${combatant.name} uses ${label} — ${desc}`);
                           }
+                        }}
+                        style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                          padding: '7px 9px', borderRadius: 4, cursor: 'pointer', textAlign: 'left',
+                          background: primary ? 'rgba(139,26,26,0.3)' : 'rgba(38,22,0,0.7)',
+                          border: `1px solid ${primary ? 'rgba(139,26,26,0.65)' : 'rgba(201,162,39,0.18)'}`,
+                        }}
+                      >
+                        <span style={{ fontSize: '0.9rem', marginBottom: 2 }}>{icon}</span>
+                        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.65rem', fontWeight: 700, color: primary ? '#f4c842' : '#f4e4bc' }}>{label}</span>
+                        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.51rem', color: 'rgba(244,228,188,0.38)', marginTop: 1, lineHeight: 1.35 }}>{desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action used, waiting */}
+              {combatStep === 'choose-action' && combatant.actionUsed && (
+                <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.62rem', color: 'rgba(244,228,188,0.4)', textAlign: 'center', padding: '6px 0' }}>
+                  Action spent — use Bonus Action or End Turn
+                </div>
+              )}
+
+              {/* Non-attack confirmation */}
+              {combatStep === 'done' && nonAttackNote && (
+                <div style={{
+                  background: 'rgba(45,27,0,0.5)', border: '1px solid rgba(201,162,39,0.25)',
+                  borderRadius: 4, padding: '7px 9px',
+                  fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: 'rgba(244,228,188,0.65)',
+                }}>
+                  {nonAttackNote}
+                </div>
+              )}
+
+              {/* STEP 2 — Choose weapon */}
+              {combatStep === 'choose-weapon' && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                    <button onClick={() => setCombatStep('choose-action')} style={{
+                      background: 'transparent', border: 'none', color: 'rgba(201,162,39,0.5)',
+                      cursor: 'pointer', fontFamily: 'Cinzel, serif', fontSize: '0.6rem', padding: 0,
+                    }}>← Back</button>
+                    <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                      Choose weapon
+                    </span>
+                  </div>
+                  {availableWeapons.length === 0 ? (
+                    <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.62rem', color: 'rgba(244,228,188,0.4)' }}>
+                      No attacks available
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {availableWeapons.map((w) => (
+                        <button
+                          key={w.name}
+                          onClick={() => { setSelectedWeapon(w); setCombatStep('pick-target'); }}
                           style={{
-                            padding: '5px 8px', borderRadius: 3, cursor: 'pointer', textAlign: 'left',
-                            background: isSelected ? 'rgba(201,162,39,0.2)' : 'rgba(26,15,0,0.6)',
-                            border: `1px solid ${isSelected ? '#c9a227' : 'rgba(201,162,39,0.2)'}`,
+                            padding: '7px 10px', borderRadius: 4, cursor: 'pointer', textAlign: 'left',
+                            background: 'rgba(26,15,0,0.8)', border: '1px solid rgba(201,162,39,0.28)',
                           }}
                         >
-                          <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: '#f4e4bc', fontWeight: 600 }}>
-                            {a.name}
+                          <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.68rem', color: '#f4e4bc', fontWeight: 700 }}>
+                            {w.name}
                           </div>
-                          <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.5)', marginTop: 1 }}>
-                            +{atkBonus} to hit &bull; {dmgDice} {dmgType}
+                          <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.45)', marginTop: 2 }}>
+                            +{w.attackBonus} to hit &bull; {w.damageDice} {w.damageType}
                           </div>
                         </button>
-                      );
-                    })}
-                </div>
-              )}
-
-              {/* Player custom attack fields */}
-              {!isMonster && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <label style={{ fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.6)', width: 58 }}>Action</label>
-                    <input
-                      value={customActionName}
-                      onChange={(e) => setCustomActionName(e.target.value)}
-                      style={{
-                        flex: 1, background: 'rgba(26,15,0,0.8)', border: '1px solid rgba(201,162,39,0.3)',
-                        borderRadius: 2, color: '#f4e4bc', fontFamily: 'Cinzel, serif', fontSize: '0.65rem', padding: '2px 5px',
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <label style={{ fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.6)', width: 58 }}>Atk Bonus</label>
-                    <input
-                      type="number"
-                      value={customAttackBonus}
-                      onChange={(e) => setCustomAttackBonus(parseInt(e.target.value) || 0)}
-                      style={{
-                        width: 50, background: 'rgba(26,15,0,0.8)', border: '1px solid rgba(201,162,39,0.3)',
-                        borderRadius: 2, color: '#f4e4bc', fontFamily: 'Cinzel, serif', fontSize: '0.65rem', padding: '2px 5px',
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <label style={{ fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.6)', width: 58 }}>Damage</label>
-                    <input
-                      value={customDamageDice}
-                      onChange={(e) => setCustomDamageDice(e.target.value)}
-                      placeholder="1d6"
-                      style={{
-                        width: 50, background: 'rgba(26,15,0,0.8)', border: '1px solid rgba(201,162,39,0.3)',
-                        borderRadius: 2, color: '#f4e4bc', fontFamily: 'Cinzel, serif', fontSize: '0.65rem', padding: '2px 5px',
-                      }}
-                    />
-                    <select
-                      value={customDamageType}
-                      onChange={(e) => setCustomDamageType(e.target.value)}
-                      style={{
-                        flex: 1, background: 'rgba(26,15,0,0.8)', border: '1px solid rgba(201,162,39,0.3)',
-                        borderRadius: 2, color: '#f4e4bc', fontFamily: 'Cinzel, serif', fontSize: '0.58rem', padding: '2px 3px',
-                      }}
-                    >
-                      {DAMAGE_TYPES.map((dt) => (
-                        <option key={dt} value={dt}>{dt}</option>
                       ))}
-                    </select>
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Target picker */}
-              <div style={{ marginBottom: 8 }}>
-                <div style={{
-                  fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.5)',
-                  marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em',
-                }}>
-                  Target
+              {/* STEP 3 — Pick target + roll */}
+              {combatStep === 'pick-target' && selectedWeapon && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                    <button onClick={() => setCombatStep('choose-weapon')} style={{
+                      background: 'transparent', border: 'none', color: 'rgba(201,162,39,0.5)',
+                      cursor: 'pointer', fontFamily: 'Cinzel, serif', fontSize: '0.6rem', padding: 0,
+                    }}>← Back</button>
+                    <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.58rem', color: 'rgba(244,228,188,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                      Pick target
+                    </span>
+                  </div>
+
+                  {/* Weapon chip */}
+                  <div style={{
+                    background: 'rgba(100,20,20,0.2)', border: '1px solid rgba(139,26,26,0.4)',
+                    borderRadius: 3, padding: '5px 9px', marginBottom: 8,
+                    fontFamily: 'Cinzel, serif', fontSize: '0.63rem',
+                  }}>
+                    <span style={{ color: '#f4c842' }}>⚔️ {selectedWeapon.name.replace(' ✓', '')}</span>
+                    <span style={{ color: 'rgba(244,228,188,0.45)', marginLeft: 6 }}>
+                      +{selectedWeapon.attackBonus} hit &bull; {selectedWeapon.damageDice} {selectedWeapon.damageType}
+                    </span>
+                  </div>
+
+                  <TargetPicker targets={targets} selectedId={selectedTargetId} onSelect={setSelectedTargetId} />
+
+                  <button
+                    onClick={handleRollAttack}
+                    disabled={!selectedTargetId}
+                    style={{
+                      width: '100%', marginTop: 8,
+                      fontFamily: 'Cinzel, serif', fontSize: '0.75rem', fontWeight: 800,
+                      textTransform: 'uppercase', letterSpacing: '0.12em', padding: '8px 10px',
+                      cursor: selectedTargetId ? 'pointer' : 'not-allowed',
+                      background: selectedTargetId ? 'rgba(139,26,26,0.75)' : 'rgba(45,27,0,0.4)',
+                      color: selectedTargetId ? '#f4e4bc' : 'rgba(244,228,188,0.2)',
+                      border: `1px solid ${selectedTargetId ? 'rgba(180,40,40,0.8)' : 'rgba(201,162,39,0.1)'}`,
+                      borderRadius: 4,
+                      boxShadow: selectedTargetId ? '0 0 12px rgba(139,26,26,0.45)' : 'none',
+                    }}
+                  >
+                    🎲 Roll d20 Attack
+                  </button>
                 </div>
-                <TargetPicker targets={targets} selectedId={selectedTargetId} onSelect={setSelectedTargetId} />
-              </div>
+              )}
 
-              {/* Roll Attack button */}
-              <button
-                onClick={handleRollAttack}
-                disabled={!canRoll}
-                style={{
-                  width: '100%', fontFamily: 'Cinzel, serif', fontSize: '0.7rem', fontWeight: 700,
-                  textTransform: 'uppercase', letterSpacing: '0.1em', padding: '5px 8px',
-                  cursor: canRoll ? 'pointer' : 'not-allowed',
-                  background: canRoll ? 'rgba(139,26,26,0.7)' : 'rgba(45,27,0,0.4)',
-                  color: canRoll ? '#f4e4bc' : 'rgba(244,228,188,0.3)',
-                  border: `1px solid ${canRoll ? 'rgba(139,26,26,0.9)' : 'rgba(201,162,39,0.15)'}`,
-                  borderRadius: 3,
-                }}
-              >
-                Roll Attack
-              </button>
-
-              {attackResult && (
-                <AttackResultBubble result={attackResult} onDismiss={() => setAttackResult(null)} />
+              {/* STEP 4 — Result */}
+              {combatStep === 'result' && attackResult && (
+                <AttackResultBubble
+                  result={attackResult}
+                  isDM={isDM}
+                  fumbleChoice={fumbleChoice}
+                  onFumbleChange={setFumbleChoice}
+                  onFumbleSend={handleFumbleSend}
+                  onDismiss={() => { setAttackResult(null); setCombatStep('done'); }}
+                />
               )}
             </div>
           )}
 
-          {/* End turn */}
-          {canEndTurn && onEndTurn && (
+          {/* End turn button */}
+          {(isDM || isMyToken) && onEndTurn && (
             <button
               onClick={onEndTurn}
               style={{
                 width: '100%', fontFamily: 'Cinzel, serif', fontSize: '0.65rem', fontWeight: 700,
-                textTransform: 'uppercase', letterSpacing: '0.1em', padding: '4px 8px',
+                textTransform: 'uppercase', letterSpacing: '0.1em', padding: '5px 8px',
                 cursor: 'pointer',
-                background: 'rgba(201,162,39,0.2)', color: '#c9a227',
-                border: '1px solid rgba(201,162,39,0.5)', borderRadius: 2,
+                background: 'rgba(201,162,39,0.12)', color: '#c9a227',
+                border: '1px solid rgba(201,162,39,0.38)', borderRadius: 2,
               }}
             >
-              End Turn
+              End Turn →
             </button>
           )}
         </div>
