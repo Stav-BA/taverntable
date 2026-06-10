@@ -6,6 +6,7 @@ import { createPixiApp, destroyPixiApp } from './PixiApp';
 import { GridSystem } from './GridSystem';
 import { TokenManager } from './TokenManager';
 import { FogCanvas } from './FogCanvas';
+import { LootModal } from '@/components/Loot/LootModal';
 import type { Application } from 'pixi.js';
 import type { RevealedArea, MapConfig } from '@/stores/gameStore';
 
@@ -31,12 +32,20 @@ function getFallbackStyle(map: MapConfig | null): React.CSSProperties {
   return { background: '#5a5060' };
 }
 
+interface ChestLootState {
+  tokenId: string;
+  gold: number;
+  items: Array<{ name: string; type: string; quantity: number }>;
+  label: string;
+}
+
 export default function CanvasContainer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<Application | null>(null);
   const gridRef = useRef<GridSystem | null>(null);
   const tokenManagerRef = useRef<TokenManager | null>(null);
   const [ready, setReady] = useState(false);
+  const [openChest, setOpenChest] = useState<ChestLootState | null>(null);
 
   const currentMap = useGameStore((s) => s.currentMap);
   const tokens = useGameStore((s) => s.tokens);
@@ -73,7 +82,24 @@ export default function CanvasContainer() {
           socketEmit.tokenMove(tokenId, x, y);
         },
         (tokenId) => {
-          useSessionStore.getState().setSelectedTokenId(tokenId);
+          const sessionState = useSessionStore.getState();
+          const isDMNow = sessionState.isDM;
+          const tokens = useGameStore.getState().tokens;
+          const clickedToken = tokens.find((t) => t.id === tokenId);
+
+          // If it's a chest token and the viewer is not the DM, open LootModal
+          if (!isDMNow && clickedToken && (clickedToken as any).isChest) {
+            const contents = (window as any).__chestContents?.[tokenId] ?? { gold: 0, items: [] };
+            setOpenChest({
+              tokenId,
+              gold: contents.gold ?? 0,
+              items: contents.items ?? [],
+              label: clickedToken.name || 'Treasure Chest',
+            });
+            return;
+          }
+
+          sessionState.setSelectedTokenId(tokenId);
         }
       );
       tokenManager.attachToStage(1);
@@ -166,6 +192,17 @@ export default function CanvasContainer() {
             <p className="font-cinzel text-gold text-sm tracking-wider">Loading Map...</p>
           </div>
         </div>
+      )}
+
+      {/* Chest loot modal — shown when a non-DM clicks a chest token */}
+      {openChest && (
+        <LootModal
+          lootId={openChest.tokenId}
+          items={openChest.items}
+          gold={openChest.gold}
+          label={openChest.label}
+          onClose={() => setOpenChest(null)}
+        />
       )}
     </div>
   );

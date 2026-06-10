@@ -560,12 +560,13 @@ export default function InitiativeTracker() {
       updateCombatant(current.id, {
         actionUsed: false,
         bonusActionUsed: false,
+        reactionUsed: false,
         movementUsed: 0,
-        // Reaction resets at START of their NEXT turn — handled in nextTurn store action
       });
       socketEmit.initiativeUpdate(current.id, {
         actionUsed: false,
         bonusActionUsed: false,
+        reactionUsed: false,
         movementUsed: 0,
       });
     }
@@ -579,8 +580,7 @@ export default function InitiativeTracker() {
     socketEmit.initiativeSet(updated);
   };
 
-  const sortedByInitiative = [...initiative].sort((a, b) => b.initiative - a.initiative);
-  const currentCombatant = sortedByInitiative[currentTurnIndex];
+  const currentCombatant = initiative[currentTurnIndex];
 
   // Map token list for roll modal
   const tokenList = tokens.map((t) => ({
@@ -655,7 +655,7 @@ export default function InitiativeTracker() {
 
       {/* Combatant list */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        {sortedByInitiative.length === 0 ? (
+        {initiative.length === 0 ? (
           <div
             style={{
               padding: 16,
@@ -669,7 +669,7 @@ export default function InitiativeTracker() {
             {isDM ? 'Click "Roll Initiative" to begin combat' : 'Waiting for DM to set initiative...'}
           </div>
         ) : (
-          sortedByInitiative.map((combatant, i) => (
+          initiative.map((combatant, i) => (
             <div key={combatant.id} style={{ position: 'relative' }}>
               <CombatantRow
                 combatant={combatant}

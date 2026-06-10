@@ -1,15 +1,1 @@
-[
-  {"slug":"padded","name":"Padded Armor","type":"light","cost":"5 gp","ac":11,"maxDexBonus":null,"stealthDisadvantage":true,"weight":8,"source":"SRD"},
-  {"slug":"leather","name":"Leather Armor","type":"light","cost":"10 gp","ac":11,"maxDexBonus":null,"stealthDisadvantage":false,"weight":10,"source":"SRD"},
-  {"slug":"studded-leather","name":"Studded Leather Armor","type":"light","cost":"45 gp","ac":12,"maxDexBonus":null,"stealthDisadvantage":false,"weight":13,"source":"SRD"},
-  {"slug":"hide","name":"Hide Armor","type":"medium","cost":"10 gp","ac":12,"maxDexBonus":2,"stealthDisadvantage":false,"weight":12,"source":"SRD"},
-  {"slug":"chain-shirt","name":"Chain Shirt","type":"medium","cost":"50 gp","ac":13,"maxDexBonus":2,"stealthDisadvantage":false,"weight":20,"source":"SRD"},
-  {"slug":"scale-mail","name":"Scale Mail","type":"medium","cost":"50 gp","ac":14,"maxDexBonus":2,"stealthDisadvantage":true,"weight":45,"source":"SRD"},
-  {"slug":"breastplate","name":"Breastplate","type":"medium","cost":"400 gp","ac":14,"maxDexBonus":2,"stealthDisadvantage":false,"weight":20,"source":"SRD"},
-  {"slug":"half-plate","name":"Half Plate Armor","type":"medium","cost":"750 gp","ac":15,"maxDexBonus":2,"stealthDisadvantage":true,"weight":40,"source":"SRD"},
-  {"slug":"ring-mail","name":"Ring Mail","type":"heavy","cost":"30 gp","ac":14,"maxDexBonus":0,"stealthDisadvantage":true,"weight":40,"source":"SRD"},
-  {"slug":"chain-mail","name":"Chain Mail","type":"heavy","cost":"75 gp","ac":16,"maxDexBonus":0,"stealthDisadvantage":true,"strengthReq":13,"weight":55,"source":"SRD"},
-  {"slug":"splint","name":"Splint Armor","type":"heavy","cost":"200 gp","ac":17,"maxDexBonus":0,"stealthDisadvantage":true,"strengthReq":15,"weight":60,"source":"SRD"},
-  {"slug":"plate","name":"Plate Armor","type":"heavy","cost":"1500 gp","ac":18,"maxDexBonus":0,"stealthDisadvantage":true,"strengthReq":15,"weight":65,"source":"SRD"},
-  {"slug":"shield","name":"Shield","type":"shield","cost":"10 gp","ac":2,"stealthDisadvantage":false,"weight":6,"source":"SRD"}
-]
+﻿[]

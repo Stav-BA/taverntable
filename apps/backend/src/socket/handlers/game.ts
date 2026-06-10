@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { updateToken, addToken, revealFog, setGameMap, setInitiative, advanceTurn } from '../../redis/sessionState';
 import type { Token, RevealedArea } from '../../redis/sessionState';
+import { redis } from '../../redis/client';
 
 interface SocketWithMeta extends Socket {
   _sessionId?: string;
@@ -219,4 +220,383 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       console.error('[turn:next]', err);
     }
   });
+
+  // ── Monster: spawn ──────────────────────────────────────────────────────────
+  socket.on(
+    'monster:spawn',
+    async (payload: {
+      sessionId: string;
+      monster: {
+        id: string;
+        name: string;
+        emoji: string;
+        imageUrl?: string;
+        hp: number;
+        maxHp: number;
+        ac: number;
+        speed: number;
+        cr: string;
+        colour: string;
+        x: number;
+        y: number;
+        tokenId: string;
+      };
+    }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+
+        const { monster } = payload;
+
+        const token: Token = {
+          id: monster.tokenId,
+          x: monster.x,
+          y: monster.y,
+          name: monster.name,
+          hp: monster.hp,
+          maxHp: monster.maxHp,
+          ac: monster.ac,
+          colour: monster.colour,
+          isNpc: true,
+          isPlayer: false,
+          conditions: [],
+          isVisible: true,
+          ...(monster.imageUrl ? { imageUrl: monster.imageUrl } : {}),
+        };
+
+        await addToken(sessionId, token);
+        io.to(sessionId).emit('token:added', token);
+      } catch (err) {
+        console.error('[monster:spawn]', err);
+      }
+    },
+  );
+
+  // ── Monster: action ─────────────────────────────────────────────────────────
+  socket.on(
+    'monster:action',
+    async (payload: {
+      sessionId: string;
+      monsterId: string;
+      actionName: string;
+      targetId?: string;
+      targetName?: string;
+      monsterName?: string;
+      roll?: number;
+    }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+
+        const { monsterId, actionName, targetId, targetName, monsterName, roll } = payload;
+        const timestamp = Date.now();
+
+        io.to(sessionId).emit('monster:action:resolved', {
+          monsterId,
+          actionName,
+          targetId,
+          roll,
+          timestamp,
+        });
+
+        const displayName = monsterName ?? monsterId;
+        const text = targetName
+          ? `🎲 ${displayName} attacks ${targetName} with ${actionName}!`
+          : `🎲 ${displayName} uses ${actionName}!`;
+
+        io.to(sessionId).emit('chat:message', {
+          id: `sys-${timestamp}`,
+          type: 'system',
+          text,
+          timestamp,
+        });
+      } catch (err) {
+        console.error('[monster:action]', err);
+      }
+    },
+  );
+
+  // ── Combat: attack resolved on client, broadcast result ───────────────────
+  socket.on(
+    'combat:attack',
+    async (payload: {
+      sessionId: string;
+      attackerName: string;
+      targetId: string;
+      targetName: string;
+      actionName: string;
+      roll: number;
+      attackBonus: number;
+      total: number;
+      targetAC: number;
+      hit: boolean;
+      isCrit: boolean;
+      damageTotal: number;
+      damageType: string;
+      newTargetHp: number;
+      newTargetConditions: string[];
+    }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+
+        const { attackerName, targetName, actionName, roll, attackBonus, total, targetAC, hit, isCrit, damageTotal, damageType, newTargetHp, newTargetConditions, targetId } = payload;
+
+        // Apply HP update to Redis game state
+        const state = await import('../../redis/sessionState').then((m) => m.getGameState(sessionId));
+        if (state) {
+          const token = state.tokens.find((t) => t.id === targetId);
+          if (token) {
+            token.hp = newTargetHp;
+            await import('../../redis/sessionState').then((m) => m.setGameState(state));
+          }
+        }
+
+        // Broadcast the initiative update so all clients sync HP
+        io.to(sessionId).emit('initiative:updated', {
+          id: targetId,
+          updates: { hp: newTargetHp, conditions: newTargetConditions },
+        });
+
+        // Build and broadcast chat message
+        const hitLabel = isCrit ? '💥 CRITICAL HIT' : hit ? '✓ HIT' : '✗ MISS';
+        const damageText = hit ? ` for **${damageTotal}** ${damageType} damage` : '';
+        const fallText = newTargetHp <= 0 && hit ? ` ☠️ ${targetName} falls!` : '';
+        const text = `⚔️ ${attackerName} attacks ${targetName} with ${actionName} (d20: ${roll}+${attackBonus}=${total} vs AC ${targetAC}) → **${hitLabel}**${damageText}${fallText}`;
+
+        io.to(sessionId).emit('chat:message', {
+          id: `combat-${Date.now()}`,
+          type: 'system',
+          text,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.error('[combat:attack]', err);
+      }
+    },
+  );
+
+  // ── Initiative: DM requests all players to roll ───────────────────────────
+  socket.on('initiative:request', async (payload: { sessionId: string }) => {
+    try {
+      const sessionId = payload.sessionId ?? s._sessionId;
+      if (!sessionId) return;
+      // Broadcast to everyone in the room (players need to see the roll prompt)
+      io.to(sessionId).emit('initiative:requested');
+    } catch (err) {
+      console.error('[initiative:request]', err);
+    }
+  });
+
+  // ── Initiative: player submits their own roll → forward to DM ─────────────
+  socket.on(
+    'initiative:roll:submit',
+    async (payload: { sessionId: string; playerId: string; roll: number }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+        const { playerId, roll } = payload;
+        // Broadcast back to room — DM's modal listens for this
+        io.to(sessionId).emit('initiative:roll:received', { playerId, roll });
+      } catch (err) {
+        console.error('[initiative:roll:submit]', err);
+      }
+    },
+  );
+
+  // ── XP award (DM → broadcast to all players) ──────────────────────────────
+  socket.on(
+    'xp:award',
+    async (payload: { sessionId: string; playerId: string; amount: number }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+        const { playerId, amount } = payload;
+        io.to(sessionId).emit('xp:awarded', { playerId, amount });
+        io.to(sessionId).emit('chat:message', {
+          id: `xp-${Date.now()}`,
+          type: 'system',
+          text: `⭐ ${amount} XP awarded!`,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.error('[xp:award]', err);
+      }
+    },
+  );
+
+  // ── Character sync (player → broadcast their sheet snapshot) ──────────────
+  socket.on(
+    'character:sync',
+    async (payload: { sessionId: string; playerId: string; updates: Record<string, unknown> }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+        // Broadcast to others in room (not back to sender)
+        socket.to(sessionId).emit('character:updated', {
+          playerId: payload.playerId,
+          updates: payload.updates,
+        });
+      } catch (err) {
+        console.error('[character:sync]', err);
+      }
+    },
+  );
+
+  // ── Random encounter: toggle ────────────────────────────────────────────────
+  socket.on(
+    'random:encounter:toggle',
+    async (payload: { sessionId: string; enabled: boolean; biome: string; partyLevel: number }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+
+        const { enabled, biome, partyLevel } = payload;
+
+        await redis.hset(`session:${sessionId}:encounter`, {
+          enabled: String(enabled),
+          biome,
+          partyLevel: String(partyLevel),
+        });
+
+        io.to(sessionId).emit('random:encounter:updated', { sessionId, enabled, biome, partyLevel });
+      } catch (err) {
+        console.error('[random:encounter:toggle]', err);
+      }
+    },
+  );
+
+  // ── Random encounter: trigger ───────────────────────────────────────────────
+  socket.on(
+    'random:encounter:trigger',
+    async (payload: { sessionId: string; x: number; y: number }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+
+        const { x, y } = payload;
+
+        const settings = await redis.hgetall(`session:${sessionId}:encounter`);
+        if (settings && settings.enabled === 'true') {
+          socket.emit('random:encounter:spawn', {
+            x,
+            y,
+            biome: settings.biome ?? 'forest',
+            partyLevel: Number(settings.partyLevel ?? 1),
+          });
+        }
+      } catch (err) {
+        console.error('[random:encounter:trigger]', err);
+      }
+    },
+  );
+
+  // ── Shop: DM opens a shop → broadcast to all players ─────────────────────
+  socket.on('shop:open', async (payload: { sessionId: string; shopId: string }) => {
+    try {
+      const sessionId = payload.sessionId ?? s._sessionId;
+      if (!sessionId) return;
+      const { shopId } = payload;
+      // Store active shop in Redis
+      await redis.hset(`session:${sessionId}:shop`, { shopId, openedAt: String(Date.now()) });
+      io.to(sessionId).emit('shop:opened', { shopId });
+      io.to(sessionId).emit('chat:message', {
+        id: `shop-${Date.now()}`,
+        type: 'system',
+        text: `🏪 The DM has opened a shop! Browse it in the Shop tab.`,
+        timestamp: Date.now(),
+      });
+    } catch (err) {
+      console.error('[shop:open]', err);
+    }
+  });
+
+  // ── Shop: DM closes the shop ──────────────────────────────────────────────
+  socket.on('shop:close', async (payload: { sessionId: string }) => {
+    try {
+      const sessionId = payload.sessionId ?? s._sessionId;
+      if (!sessionId) return;
+      await redis.del(`session:${sessionId}:shop`);
+      io.to(sessionId).emit('shop:closed');
+      io.to(sessionId).emit('chat:message', {
+        id: `shop-closed-${Date.now()}`,
+        type: 'system',
+        text: `🏪 The shop has closed.`,
+        timestamp: Date.now(),
+      });
+    } catch (err) {
+      console.error('[shop:close]', err);
+    }
+  });
+
+  // ── Shop: player purchases an item → broadcast to chat ───────────────────
+  socket.on(
+    'shop:purchase',
+    async (payload: { sessionId: string; playerId: string; playerName: string; itemName: string; costGp: number }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+        const { playerName, itemName, costGp } = payload;
+        io.to(sessionId).emit('shop:purchase', { playerName, itemName, costGp });
+        io.to(sessionId).emit('chat:message', {
+          id: `purchase-${Date.now()}`,
+          type: 'system',
+          text: `💰 ${playerName} bought ${itemName} for ${costGp} gp`,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.error('[shop:purchase]', err);
+      }
+    },
+  );
+
+  // ── Loot: DM drops loot → all players see the popup ──────────────────────
+  socket.on(
+    'loot:drop',
+    async (payload: {
+      sessionId: string;
+      lootId: string;
+      items: Array<{ name: string; type: string; quantity: number; costGp?: number }>;
+      gold: number;
+      label?: string;
+    }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+        const { lootId, items, gold, label } = payload;
+        io.to(sessionId).emit('loot:dropped', { lootId, items, gold, label: label ?? 'Loot' });
+        io.to(sessionId).emit('chat:message', {
+          id: `loot-${Date.now()}`,
+          type: 'system',
+          text: `💎 ${label ?? 'Loot'} is available! Check the Loot popup.`,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.error('[loot:drop]', err);
+      }
+    },
+  );
+
+  // ── Loot: player takes an item ────────────────────────────────────────────
+  socket.on(
+    'loot:take',
+    async (payload: { sessionId: string; lootId: string; playerId: string; playerName: string; itemName: string }) => {
+      try {
+        const sessionId = payload.sessionId ?? s._sessionId;
+        if (!sessionId) return;
+        const { lootId, playerId, playerName, itemName } = payload;
+        // Mark as taken in Redis
+        await redis.sadd(`session:${sessionId}:loot:${lootId}:taken`, `${playerId}:${itemName}`);
+        io.to(sessionId).emit('loot:taken', { lootId, playerId, playerName, itemName });
+        io.to(sessionId).emit('chat:message', {
+          id: `loot-take-${Date.now()}`,
+          type: 'system',
+          text: `💎 ${playerName} took ${itemName}`,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.error('[loot:take]', err);
+      }
+    },
+  );
 }

@@ -12,11 +12,12 @@ interface WeaponListProps {
   strMod: number;
   dexMod: number;
   onRemove: (id: string) => void;
+  onEquip?: (id: string) => void;
 }
 
 function modStr(n: number) { return n >= 0 ? `+${n}` : `${n}`; }
 
-export default function WeaponList({ weapons, profBonus, strMod, dexMod, onRemove }: WeaponListProps) {
+export default function WeaponList({ weapons, profBonus, strMod, dexMod, onRemove, onEquip }: WeaponListProps) {
   return (
     <div style={{ background: '#EDD9A3', border: '2px solid #2D1B00', borderRadius: 8, padding: 16 }}>
       <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: '#5A3E1B', letterSpacing: '0.06em', marginBottom: 12 }}>
@@ -55,8 +56,19 @@ export default function WeaponList({ weapons, profBonus, strMod, dexMod, onRemov
                 }}
               >
                 <div style={{ flex: 2 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color: '#2D1B00' }}>
-                    {weapon.name}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color: '#2D1B00' }}>
+                      {weapon.name}
+                    </div>
+                    {weapon.equipped && (
+                      <span style={{
+                        background: '#C9A227', color: '#2D1B00',
+                        borderRadius: 10, padding: '1px 7px',
+                        fontSize: 10, fontFamily: "'Cinzel', serif", fontWeight: 700,
+                      }}>
+                        ⚔ Equipped
+                      </span>
+                    )}
                   </div>
                   {data.range && (
                     <div style={{ fontSize: 11, color: '#5A3E1B' }}>Range: {data.range}</div>
@@ -83,6 +95,21 @@ export default function WeaponList({ weapons, profBonus, strMod, dexMod, onRemov
                     </span>
                   )}
                 </div>
+                {onEquip && (
+                  <button
+                    onClick={() => onEquip(weapon.id)}
+                    style={{
+                      background: weapon.equipped ? '#C9A227' : '#EDD9A3',
+                      color: '#2D1B00',
+                      border: '1px solid #2D1B00', borderRadius: 4,
+                      padding: '3px 8px', cursor: 'pointer',
+                      fontSize: 11, fontFamily: "'Cinzel', serif",
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {weapon.equipped ? '✓ Equipped' : 'Equip'}
+                  </button>
+                )}
                 <button
                   onClick={() => onRemove(weapon.id)}
                   style={{

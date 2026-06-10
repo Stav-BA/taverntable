@@ -446,4 +446,56 @@ export function registerAIDMHandlers(io: Server, socket: Socket): void {
       });
     }
   });
+
+  // -------------------------------------------------------------------------
+  // monster:ai:suggest — Gemini suggests the best action for a monster this turn
+  // -------------------------------------------------------------------------
+  socket.on('monster:ai:suggest', async (payload: {
+    monsterName: string;
+    monsterType: string;
+    cr: string;
+    actions: Array<{ name: string; description: string }>;
+    targets: Array<{ name: string; hp: number; maxHp: number; ac: number; conditions: string[] }>;
+    round: number;
+  }) => {
+    const { monsterName, monsterType, cr, actions, targets, round } = payload ?? {};
+    if (!monsterName || !actions?.length) {
+      socket.emit('monster:ai:suggestion', { action: actions?.[0]?.name ?? 'Attack', target: null, reasoning: '' });
+      return;
+    }
+
+    const actionsList = actions.map((a) => `- ${a.name}: ${a.description}`).join('\n');
+    const targetsList = targets?.length
+      ? targets.map((t) => `  ${t.name} (HP ${t.hp}/${t.maxHp}, AC ${t.ac}${t.conditions?.length ? ', conditions: ' + t.conditions.join(', ') : ''})`).join('\n')
+      : '  No visible targets';
+
+    const prompt = `You are a D&D 5e 2024 DM. It is round ${round} of combat. The ${monsterName} (${monsterType}, CR ${cr}) is taking its turn.\n\nAvailable actions:\n${actionsList}\n\nCurrent targets:\n${targetsList}\n\nChoose the best action for the ${monsterName} this round. Respond ONLY in JSON:\n{"action": "exact action name from the list", "target": "target name or null", "reasoning": "one short sentence"}`;
+
+    try {
+      const genAI = new (await import('@google/generative-ai')).GoogleGenerativeAI(
+        process.env.GOOGLE_API_KEY ?? '',
+      );
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: { maxOutputTokens: 150, temperature: 0.7 },
+      });
+
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().trim();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        socket.emit('monster:ai:suggestion', {
+          action: parsed.action ?? actions[0].name,
+          target: parsed.target ?? null,
+          reasoning: parsed.reasoning ?? '',
+        });
+      } else {
+        socket.emit('monster:ai:suggestion', { action: actions[0].name, target: null, reasoning: '' });
+      }
+    } catch (err) {
+      console.error('[aiDm] monster:ai:suggest error:', err);
+      socket.emit('monster:ai:suggestion', { action: actions[0].name, target: null, reasoning: 'AI unavailable' });
+    }
+  });
 }

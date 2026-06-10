@@ -170,12 +170,12 @@ export const ContentSearchModal: React.FC<ContentSearchModalProps> = ({
                 {isExpanded && (
                   <div className="p-3 bg-[#fdf1dc]/80">
                     {tab === 'monsters' && <MonsterStatBlock monster={m as Parameters<typeof MonsterStatBlock>[0]['monster']} />}
-                    {tab === 'spells' && <SpellCard spell={m as Parameters<typeof SpellCard>[0]['spell']} />}
+                    {tab === 'spells' && <SpellCard spell={m as unknown as Parameters<typeof SpellCard>[0]['spell']} />}
                     {tab === 'items' && (
                       <div className="text-sm text-gray-800">
-                        {m.description as string}
-                        {m.mastery && <p className="mt-1"><span className="font-bold">Mastery:</span> {m.mastery as string}</p>}
-                        {m.rarity && <p className="mt-1"><span className="font-bold">Rarity:</span> {m.rarity as string}</p>}
+                        {String(m.description ?? '')}
+                        {!!m.mastery && <p className="mt-1"><span className="font-bold">Mastery:</span> {String(m.mastery)}</p>}
+                        {!!m.rarity && <p className="mt-1"><span className="font-bold">Rarity:</span> {String(m.rarity)}</p>}
                       </div>
                     )}
                   </div>

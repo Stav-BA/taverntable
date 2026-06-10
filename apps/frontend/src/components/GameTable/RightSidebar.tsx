@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '@/stores/gameStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { socketEmit } from '@/lib/socket';
 import { DMToolsPanel } from '@/components/DMTools';
+import { LootModal } from '@/components/Loot';
 
 const MACRO_PRESETS = [
   { label: 'Perception', icon: '👁', expression: '1d20', modifier: 0 },
@@ -12,6 +13,13 @@ const MACRO_PRESETS = [
   { label: 'Inspiration', icon: '✨', expression: '1d20', modifier: 0 },
   { label: 'Short Rest', icon: '🛌', expression: '1d6', modifier: 0 },
 ];
+
+interface ActiveLoot {
+  lootId: string;
+  items: Array<{ name: string; type: string; quantity: number; costGp?: number }>;
+  gold: number;
+  label: string;
+}
 
 function StatBlock({ label, value }: { label: string; value: string | number }) {
   return (
@@ -67,12 +75,23 @@ export default function RightSidebar() {
   const selectedTokenId = useSessionStore((s) => s.selectedTokenId);
   const connectedPlayers = useSessionStore((s) => s.connectedPlayers);
   const [activeTab, setActiveTab] = useState<'character' | 'players' | 'dm-tools'>('character');
+  const [showLootModal, setShowLootModal] = useState(false);
+  const [activeLoot, setActiveLoot] = useState<ActiveLoot | null>(null);
+
+  // Poll for loot every 2 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const loot = (window as any).__activeLoot as ActiveLoot | null | undefined;
+      setActiveLoot(loot ?? null);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   const myToken = tokens.find((t) => t.playerId === player?.id) ?? null;
   const selectedToken = selectedTokenId ? tokens.find((t) => t.id === selectedTokenId) : null;
   const displayToken = selectedToken ?? myToken;
 
-  const handleMacroRoll = (expression: string, modifier: number, label: string) => {
+  const handleMacroRoll = (expression: string, modifier: number, _label: string) => {
     if (!player) return;
     const requestId = Math.random().toString(36).slice(2, 11);
     socketEmit.diceRoll(expression, modifier, requestId);
@@ -258,6 +277,40 @@ export default function RightSidebar() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Floating loot button — visible to all when loot is available */}
+      {activeLoot && (
+        <div style={{ padding: '8px', borderTop: '1px solid rgba(201,162,39,0.3)', flexShrink: 0 }}>
+          <button
+            onClick={() => setShowLootModal(true)}
+            style={{
+              width: '100%', padding: '8px 0',
+              background: 'rgba(201,162,39,0.2)',
+              border: '1px solid rgba(201,162,39,0.5)',
+              borderRadius: 4, cursor: 'pointer',
+              color: '#c9a227', fontSize: 12, fontFamily: 'Cinzel, serif',
+              fontWeight: 600, letterSpacing: 0.5,
+            }}
+          >
+            💎 Loot Available! — Open
+          </button>
+        </div>
+      )}
+
+      {/* Loot modal overlay */}
+      {showLootModal && activeLoot && (
+        <LootModal
+          lootId={activeLoot.lootId}
+          items={activeLoot.items}
+          gold={activeLoot.gold}
+          label={activeLoot.label}
+          onClose={() => {
+            (window as any).__activeLoot = null;
+            setActiveLoot(null);
+            setShowLootModal(false);
+          }}
+        />
       )}
     </div>
   );

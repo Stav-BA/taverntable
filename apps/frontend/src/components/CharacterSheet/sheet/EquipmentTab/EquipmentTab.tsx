@@ -35,6 +35,10 @@ export default function EquipmentTab({ character, calcs, hooks }: EquipmentTabPr
           strMod={calcs.strMod}
           dexMod={calcs.dexMod}
           onRemove={hooks.removeEquipment}
+          onEquip={(id) => {
+            // Only one weapon equipped at a time — toggle selected, unequip others
+            weapons.forEach((w) => hooks.updateEquipment(w.id, { equipped: w.id === id ? !w.equipped : false }));
+          }}
         />
         <ArmorSection
           armors={armors}

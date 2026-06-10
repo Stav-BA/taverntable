@@ -1,12 +1,24 @@
 import express from 'express';
 import Fuse from 'fuse.js';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
-// Load SRD data at startup
-import monsters from '../../../../content/srd/monsters/index.json';
-import spells from '../../../../content/srd/spells/index.json';
-import weapons from '../../../../content/srd/items/weapons.json';
-import armor from '../../../../content/srd/items/armor.json';
-import magicItems from '../../../../content/srd/items/magic-items.json';
+type SRDRecord = Record<string, unknown>;
+
+function loadJson(rel: string): SRDRecord[] {
+  try {
+    return JSON.parse(readFileSync(resolve(__dirname, rel), 'utf-8')) as SRDRecord[];
+  } catch {
+    return [];
+  }
+}
+
+// Load SRD data at startup (empty until populated)
+const monsters = loadJson('../../../../content/srd/monsters/index.json');
+const spells   = loadJson('../../../../content/srd/spells/index.json');
+const weapons  = loadJson('../../../../content/srd/items/weapons.json');
+const armor    = loadJson('../../../../content/srd/items/armor.json');
+const magicItems = loadJson('../../../../content/srd/items/magic-items.json');
 
 const router = express.Router();
 
@@ -74,7 +86,7 @@ router.get('/monsters', (req, res) => {
   const pageNum = Math.max(1, parseInt(page));
   const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
 
-  let results: typeof monsters[0][] = monsters;
+  let results: SRDRecord[] = monsters;
 
   if (search) {
     results = monsterFuse.search(search).map((r) => r.item);
@@ -82,12 +94,12 @@ router.get('/monsters', (req, res) => {
 
   if (cr !== undefined) {
     const crNum = parseFloat(cr);
-    results = results.filter((m) => m.cr === crNum);
+    results = results.filter((m) => m['cr'] === crNum);
   }
 
   if (type) {
     const typeLower = type.toLowerCase();
-    results = results.filter((m) => m.type.toLowerCase().includes(typeLower));
+    results = results.filter((m) => String(m['type'] ?? '').toLowerCase().includes(typeLower));
   }
 
   res.json(paginate(results, pageNum, limitNum));
@@ -99,7 +111,7 @@ router.get('/spells', (req, res) => {
   const pageNum = Math.max(1, parseInt(page));
   const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
 
-  let results: typeof spells[0][] = spells;
+  let results: SRDRecord[] = spells;
 
   if (search) {
     results = spellFuse.search(search).map((r) => r.item);
@@ -107,17 +119,17 @@ router.get('/spells', (req, res) => {
 
   if (level !== undefined) {
     const lvlNum = parseInt(level);
-    results = results.filter((s) => s.level === lvlNum);
+    results = results.filter((s) => s['level'] === lvlNum);
   }
 
   if (cls) {
     const clsLower = cls.toLowerCase();
-    results = results.filter((s) => s.classes.includes(clsLower));
+    results = results.filter((s) => Array.isArray(s['classes']) && (s['classes'] as string[]).includes(clsLower));
   }
 
   if (school) {
     const schoolLower = school.toLowerCase();
-    results = results.filter((s) => s.school.toLowerCase() === schoolLower);
+    results = results.filter((s) => String(s['school'] ?? '').toLowerCase() === schoolLower);
   }
 
   res.json(paginate(results, pageNum, limitNum));
@@ -129,7 +141,7 @@ router.get('/items', (req, res) => {
   const pageNum = Math.max(1, parseInt(page));
   const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
 
-  let results: (typeof weapons[0] | typeof armor[0] | typeof magicItems[0])[] = allItems;
+  let results: SRDRecord[] = allItems;
 
   if (search) {
     results = itemFuse.search(search).map((r) => r.item);
@@ -137,11 +149,11 @@ router.get('/items', (req, res) => {
 
   if (type) {
     const typeLower = type.toLowerCase();
-    results = results.filter((i) => i.type.toLowerCase().includes(typeLower));
+    results = results.filter((i) => String(i['type'] ?? '').toLowerCase().includes(typeLower));
   }
 
   if (rarity) {
-    results = results.filter((i) => 'rarity' in i && (i as { rarity?: string }).rarity === rarity);
+    results = results.filter((i) => i['rarity'] === rarity);
   }
 
   res.json(paginate(results, pageNum, limitNum));
@@ -168,9 +180,9 @@ router.get('/encounter-builder', (req, res) => {
   }, 0);
 
   // Find monsters whose XP (with multiplier) fits the budget within 20%
-  const suggestions: Array<{ monsters: typeof monsters; totalXP: number; adjustedXP: number; difficulty: string }> = [];
+  const suggestions: Array<{ monsters: SRDRecord[]; totalXP: number; adjustedXP: number; difficulty: string }> = [];
 
-  const srdMonsters = monsters.filter((m) => typeof m.xp === 'number');
+  const srdMonsters = monsters.filter((m) => typeof m['xp'] === 'number');
 
   // Try groups of 1, 2, 4 monsters
   for (const count of [1, 2, 4, 6]) {
@@ -178,9 +190,9 @@ router.get('/encounter-builder', (req, res) => {
     const targetXP = partyBudget / multiplier;
     const xpPerMonster = targetXP / count;
 
-    const match = srdMonsters.find((m) => Math.abs(m.xp - xpPerMonster) < xpPerMonster * 0.3);
+    const match = srdMonsters.find((m) => Math.abs((m['xp'] as number) - xpPerMonster) < xpPerMonster * 0.3);
     if (match) {
-      const totalXP = match.xp * count;
+      const totalXP = (match['xp'] as number) * count;
       const adjustedXP = totalXP * multiplier;
       suggestions.push({
         monsters: Array(count).fill(match),

@@ -3,6 +3,8 @@ import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
 import { useGameStore } from '@/stores/gameStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useAudioStore } from '@/stores/audioStore';
+import { useCharacterStore } from '@/stores/characterStore';
+import { getAppropriateMonsters } from '@/lib/monsters';
 import type { Token, Combatant, RevealedArea, ChatMessage, DiceRollResult, MapConfig } from '@/stores/gameStore';
 import type { PlayerInfo } from '@/stores/sessionStore';
 import type { AudioTrack } from '@/stores/audioStore';
@@ -48,8 +50,9 @@ export function useSocket() {
 
     const socket = connectSocket(sessionId, player.id, isDM);
 
-    // Connection lifecycle
-    socket.on('connect', () => {
+    // ── Named handlers ────────────────────────────────────────────────────────
+
+    const onConnect = () => {
       console.log('[Socket] Connected:', socket.id, '| sessionId:', sessionId, '| isDM:', isDM, '| player:', player.name);
       socket.emit('session:join', {
         sessionId,
@@ -58,103 +61,91 @@ export function useSocket() {
         isDM,
         colour: player.colour,
       });
-    });
+    };
 
-    socket.on('disconnect', (reason) => {
+    const onDisconnect = (reason: string) => {
       console.warn('[Socket] Disconnected:', reason);
-      // Reconnect handled automatically by socket.io
-    });
+    };
 
-    socket.on('connect_error', (err) => {
+    const onConnectError = (err: Error) => {
       console.error('[Socket] Connection error:', err.message);
-    });
+    };
 
-    // Full game state sync on join
-    socket.on(
-      'game:state',
-      (state: {
-        tokens?: Token[];
-        fogRevealed?: RevealedArea[];
-        fogEnabled?: boolean;
-        initiative?: Combatant[];
-        currentTurnIndex?: number;
-        inCombat?: boolean;
-        currentMap?: MapConfig | null;
-        mapId?: string | null;
-        connectedPlayers?: PlayerInfo[];
-      }) => {
-        if (state.tokens) setTokens(state.tokens);
-        if (state.fogRevealed) setFogRevealed(state.fogRevealed);
-        if (state.fogEnabled !== undefined) setFogEnabled(state.fogEnabled);
-        if (state.initiative) setInitiative(state.initiative);
-        if (state.inCombat !== undefined) setInCombat(state.inCombat);
+    const onGameState = (state: {
+      tokens?: Token[];
+      fogRevealed?: RevealedArea[];
+      fogEnabled?: boolean;
+      initiative?: Combatant[];
+      currentTurnIndex?: number;
+      inCombat?: boolean;
+      currentMap?: MapConfig | null;
+      mapId?: string | null;
+      connectedPlayers?: PlayerInfo[];
+    }) => {
+      if (state.tokens) setTokens(state.tokens);
+      if (state.fogRevealed) setFogRevealed(state.fogRevealed);
+      if (state.fogEnabled !== undefined) setFogEnabled(state.fogEnabled);
+      if (state.initiative) setInitiative(state.initiative);
+      if (state.inCombat !== undefined) setInCombat(state.inCombat);
 
-        // Resolve map: prefer full MapConfig, fall back to resolving mapId from availableMaps
-        if (state.currentMap) {
-          setCurrentMap(state.currentMap);
-        } else if (state.mapId) {
-          const { availableMaps } = useGameStore.getState();
-          const resolved = availableMaps.find((m) => m.id === state.mapId);
-          if (resolved) setCurrentMap(resolved);
-        }
-
-        if (state.connectedPlayers) setConnectedPlayers(state.connectedPlayers);
-        applyServerState({
-          currentTurnIndex: state.currentTurnIndex ?? 0,
-        });
+      if (state.currentMap) {
+        setCurrentMap(state.currentMap);
+      } else if (state.mapId) {
+        const { availableMaps } = useGameStore.getState();
+        const resolved = availableMaps.find((m) => m.id === state.mapId);
+        if (resolved) setCurrentMap(resolved);
       }
-    );
+
+      if (state.connectedPlayers) setConnectedPlayers(state.connectedPlayers);
+      applyServerState({
+        currentTurnIndex: state.currentTurnIndex ?? 0,
+      });
+    };
 
     // Token events
-    socket.on('token:moved', ({ tokenId, x, y }: { tokenId: string; x: number; y: number }) => {
+    const onTokenMoved = ({ tokenId, x, y }: { tokenId: string; x: number; y: number }) => {
       updateToken(tokenId, { x, y });
-    });
+    };
 
-    socket.on(
-      'token:updated',
-      ({ tokenId, updates }: { tokenId: string; updates: Partial<Token> }) => {
-        updateToken(tokenId, updates);
-      }
-    );
+    const onTokenUpdated = ({ tokenId, updates }: { tokenId: string; updates: Partial<Token> }) => {
+      updateToken(tokenId, updates);
+    };
 
-    socket.on('token:added', (token: Token) => {
+    const onTokenAdded = (token: Token) => {
       addToken(token);
-    });
+    };
 
-    socket.on('token:removed', ({ tokenId }: { tokenId: string }) => {
+    const onTokenRemoved = ({ tokenId }: { tokenId: string }) => {
       removeToken(tokenId);
-    });
+    };
 
     // Fog events
-    socket.on('fog:revealed', (area: RevealedArea) => {
+    const onFogRevealed = (area: RevealedArea) => {
       addRevealedArea(area);
-    });
+    };
 
-    socket.on('fog:reset', (areas: RevealedArea[]) => {
+    const onFogReset = (areas: RevealedArea[]) => {
       setFogRevealed(areas);
-    });
+    };
 
-    socket.on('fog:toggled', ({ enabled }: { enabled: boolean }) => {
+    const onFogToggled = ({ enabled }: { enabled: boolean }) => {
       setFogEnabled(enabled);
-    });
+    };
 
     // Initiative / combat
-    socket.on('initiative:set', (combatants: Combatant[]) => {
+    const onInitiativeSet = (combatants: Combatant[]) => {
       setInitiative(combatants);
-    });
+    };
 
-    socket.on(
-      'initiative:updated',
-      ({ id, updates }: { id: string; updates: Partial<Combatant> }) => {
-        updateCombatant(id, updates);
-      }
-    );
+    const onInitiativeUpdated = ({ id, updates }: { id: string; updates: Partial<Combatant> }) => {
+      updateCombatant(id, updates);
+    };
 
-    socket.on('initiative:next', () => {
+    const onInitiativeNext = () => {
       nextTurn();
-    });
+    };
 
-    socket.on('combat:started', () => {
+    const onCombatStarted = () => {
       setInCombat(true);
       addChatMessage({
         id: `sys-${Date.now()}`,
@@ -162,9 +153,9 @@ export function useSocket() {
         text: '⚔️ Combat has begun! Roll for initiative!',
         timestamp: Date.now(),
       });
-    });
+    };
 
-    socket.on('combat:ended', () => {
+    const onCombatEnded = () => {
       setInCombat(false);
       addChatMessage({
         id: `sys-${Date.now()}`,
@@ -172,12 +163,11 @@ export function useSocket() {
         text: '🏳️ Combat has ended. Peace restored... for now.',
         timestamp: Date.now(),
       });
-    });
+    };
 
     // Map change
-    socket.on('map:changed', (mapData: MapConfig | { id: string }) => {
+    const onMapChanged = (mapData: MapConfig | { id: string }) => {
       const { availableMaps } = useGameStore.getState();
-      // Resolve partial { id } or full MapConfig
       const mapConfig: MapConfig | undefined =
         'gridCols' in mapData
           ? (mapData as MapConfig)
@@ -192,15 +182,15 @@ export function useSocket() {
           timestamp: Date.now(),
         });
       }
-    });
+    };
 
     // Chat
-    socket.on('chat:message', (msg: ChatMessage) => {
+    const onChatMessage = (msg: ChatMessage) => {
       addChatMessage(msg);
-    });
+    };
 
     // Dice
-    socket.on('dice:result', (result: DiceRollResult) => {
+    const onDiceResult = (result: DiceRollResult) => {
       addDiceRoll(result);
       addChatMessage({
         id: `roll-${result.id}`,
@@ -211,24 +201,24 @@ export function useSocket() {
         rollResult: result,
         timestamp: result.timestamp,
       });
-    });
+    };
 
     // Audio (DM-controlled)
-    socket.on('audio:play', ({ trackId }: { trackId: string }) => {
+    const onAudioPlay = ({ trackId }: { trackId: string }) => {
       const track = tracks.find((t: AudioTrack) => t.id === trackId);
       if (track) setTrack(track);
-    });
+    };
 
-    socket.on('audio:pause', () => {
+    const onAudioPause = () => {
       pause();
-    });
+    };
 
-    socket.on('audio:volume', ({ volume }: { volume: number }) => {
+    const onAudioVolume = ({ volume }: { volume: number }) => {
       setVolume(volume);
-    });
+    };
 
     // Player presence
-    socket.on('player:joined', (playerInfo: PlayerInfo) => {
+    const onPlayerJoined = (playerInfo: PlayerInfo) => {
       addPlayer(playerInfo);
       addChatMessage({
         id: `sys-${Date.now()}`,
@@ -236,9 +226,9 @@ export function useSocket() {
         text: `${playerInfo.name} has joined the session.`,
         timestamp: Date.now(),
       });
-    });
+    };
 
-    socket.on('player:left', ({ playerId, playerName }: { playerId: string; playerName: string }) => {
+    const onPlayerLeft = ({ playerId, playerName }: { playerId: string; playerName: string }) => {
       removePlayer(playerId);
       addChatMessage({
         id: `sys-${Date.now()}`,
@@ -246,20 +236,20 @@ export function useSocket() {
         text: `${playerName} has left the session.`,
         timestamp: Date.now(),
       });
-    });
+    };
 
-    socket.on('players:list', (players: PlayerInfo[]) => {
+    const onPlayersList = (players: PlayerInfo[]) => {
       console.log('[Socket] players:list received:', players);
       setConnectedPlayers(players);
-    });
+    };
 
     // Adventure started overlay
-    socket.on('adventure:started', ({ campaignName, lore }: { campaignName: string; lore: string }) => {
+    const onAdventureStarted = ({ campaignName, lore }: { campaignName: string; lore: string }) => {
       setAdventureStarted(true, { campaignName, lore });
-    });
+    };
 
     // Rest events
-    socket.on('rest:taken', ({ type }: { type: 'short' | 'long' }) => {
+    const onRestTaken = ({ type }: { type: 'short' | 'long' }) => {
       addChatMessage({
         id: `sys-rest-${Date.now()}`,
         type: 'system',
@@ -268,38 +258,134 @@ export function useSocket() {
           : 'Long Rest complete — all HP, spell slots, and Hit Dice restored.',
         timestamp: Date.now(),
       });
-    });
+    };
+
+    // ── Register all listeners ────────────────────────────────────────────────
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
+    socket.on('game:state', onGameState);
+    socket.on('token:moved', onTokenMoved);
+    socket.on('token:updated', onTokenUpdated);
+    socket.on('token:added', onTokenAdded);
+    socket.on('token:removed', onTokenRemoved);
+    socket.on('fog:revealed', onFogRevealed);
+    socket.on('fog:reset', onFogReset);
+    socket.on('fog:toggled', onFogToggled);
+    socket.on('initiative:set', onInitiativeSet);
+    socket.on('initiative:updated', onInitiativeUpdated);
+    socket.on('initiative:next', onInitiativeNext);
+    socket.on('combat:started', onCombatStarted);
+    socket.on('combat:ended', onCombatEnded);
+    socket.on('map:changed', onMapChanged);
+    socket.on('chat:message', onChatMessage);
+    socket.on('dice:result', onDiceResult);
+    socket.on('audio:play', onAudioPlay);
+    socket.on('audio:pause', onAudioPause);
+    socket.on('audio:volume', onAudioVolume);
+    socket.on('player:joined', onPlayerJoined);
+    socket.on('player:left', onPlayerLeft);
+    socket.on('players:list', onPlayersList);
+    socket.on('adventure:started', onAdventureStarted);
+    socket.on('rest:taken', onRestTaken);
+
+    // ── Random encounter auto-spawn ─────────────────────────────────────────
+    const onRandomEncounterSpawn = ({ x, y, biome, partyLevel }: { x: number; y: number; biome: string; partyLevel: number }) => {
+      const pool = getAppropriateMonsters(partyLevel, biome);
+      if (pool.length === 0) return;
+      const monster = pool[Math.floor(Math.random() * pool.length)];
+      const tokenId = `monster-${monster.id}-${Date.now()}`;
+      socket.emit('monster:spawn', {
+        sessionId,
+        monster: { id: monster.id, tokenId, name: monster.name, emoji: monster.emoji, imageUrl: `emoji:${monster.emoji}`, hp: monster.hp, maxHp: monster.hp, ac: monster.ac, speed: monster.speed, cr: monster.cr, colour: monster.colour, x, y },
+      });
+      addChatMessage({ id: `sys-encounter-${Date.now()}`, type: 'system', text: `⚡ Random encounter! A ${monster.name} appears! (CR ${monster.cr})`, timestamp: Date.now() });
+    };
+    socket.on('random:encounter:spawn', onRandomEncounterSpawn);
+
+    // ── Combat attack sync ──────────────────────────────────────────────────
+    const onCombatAttackResult = ({ targetId, newHp, conditions }: { targetId: string; newHp: number; conditions: string[] }) => {
+      useGameStore.getState().updateCombatant(targetId, { hp: newHp, conditions: conditions as Combatant['conditions'] });
+    };
+    socket.on('combat:attack:result', onCombatAttackResult);
+
+    // ── XP award ────────────────────────────────────────────────────────────
+    const onXpAwarded = ({ playerId, amount }: { playerId: string; amount: number }) => {
+      const didLevelUp = useCharacterStore.getState().awardXP(playerId, amount);
+      if (didLevelUp) {
+        addChatMessage({ id: `lvlup-${Date.now()}`, type: 'system', text: `🎉 Level up! Your character reached a new level!`, timestamp: Date.now() });
+      }
+    };
+    socket.on('xp:awarded', onXpAwarded);
+
+    // ── Character sheet sync ─────────────────────────────────────────────────
+    const onCharacterUpdated = ({ playerId, updates }: { playerId: string; updates: Record<string, unknown> }) => {
+      const { updateSheet } = useCharacterStore.getState();
+      updateSheet(playerId, updates as Parameters<typeof updateSheet>[1]);
+    };
+    socket.on('character:updated', onCharacterUpdated);
+
+    // ── Shop ─────────────────────────────────────────────────────────────────
+    const onShopOpened = ({ shopId }: { shopId: string }) => {
+      (window as any).__activeShopId = shopId;
+    };
+    socket.on('shop:opened', onShopOpened);
+
+    const onShopClosed = () => {
+      (window as any).__activeShopId = null;
+    };
+    socket.on('shop:closed', onShopClosed);
+
+    // ── Loot ─────────────────────────────────────────────────────────────────
+    const onLootDropped = ({ lootId, items, gold, label }: { lootId: string; items: Array<{ name: string; type: string; quantity: number; costGp?: number }>; gold: number; label: string }) => {
+      (window as any).__activeLoot = { lootId, items, gold, label };
+    };
+    socket.on('loot:dropped', onLootDropped);
+
+    const onLootTaken = (_data: { lootId: string; playerId: string; playerName: string; itemName: string }) => {
+      // chat:message for loot takes is broadcast by backend
+    };
+    socket.on('loot:taken', onLootTaken);
 
     return () => {
       hasConnected.current = false;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('connect_error');
-      socket.off('game:state');
-      socket.off('token:moved');
-      socket.off('token:updated');
-      socket.off('token:added');
-      socket.off('token:removed');
-      socket.off('fog:revealed');
-      socket.off('fog:reset');
-      socket.off('fog:toggled');
-      socket.off('initiative:set');
-      socket.off('initiative:updated');
-      socket.off('initiative:next');
-      socket.off('combat:started');
-      socket.off('combat:ended');
-      socket.off('map:changed');
-      socket.off('chat:message');
-      socket.off('dice:result');
-      socket.off('audio:play');
-      socket.off('audio:pause');
-      socket.off('audio:volume');
-      socket.off('player:joined');
-      socket.off('player:left');
-      socket.off('players:list');
-      socket.off('adventure:started');
-      socket.off('rest:taken');
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
+      socket.off('game:state', onGameState);
+      socket.off('token:moved', onTokenMoved);
+      socket.off('token:updated', onTokenUpdated);
+      socket.off('token:added', onTokenAdded);
+      socket.off('token:removed', onTokenRemoved);
+      socket.off('fog:revealed', onFogRevealed);
+      socket.off('fog:reset', onFogReset);
+      socket.off('fog:toggled', onFogToggled);
+      socket.off('initiative:set', onInitiativeSet);
+      socket.off('initiative:updated', onInitiativeUpdated);
+      socket.off('initiative:next', onInitiativeNext);
+      socket.off('combat:started', onCombatStarted);
+      socket.off('combat:ended', onCombatEnded);
+      socket.off('map:changed', onMapChanged);
+      socket.off('chat:message', onChatMessage);
+      socket.off('dice:result', onDiceResult);
+      socket.off('audio:play', onAudioPlay);
+      socket.off('audio:pause', onAudioPause);
+      socket.off('audio:volume', onAudioVolume);
+      socket.off('player:joined', onPlayerJoined);
+      socket.off('player:left', onPlayerLeft);
+      socket.off('players:list', onPlayersList);
+      socket.off('adventure:started', onAdventureStarted);
+      socket.off('rest:taken', onRestTaken);
+      socket.off('random:encounter:spawn', onRandomEncounterSpawn);
+      socket.off('combat:attack:result', onCombatAttackResult);
+      socket.off('xp:awarded', onXpAwarded);
+      socket.off('character:updated', onCharacterUpdated);
+      socket.off('shop:opened', onShopOpened);
+      socket.off('shop:closed', onShopClosed);
+      socket.off('loot:dropped', onLootDropped);
+      socket.off('loot:taken', onLootTaken);
       disconnectSocket();
     };
   }, [sessionId, player?.id, isDM]);

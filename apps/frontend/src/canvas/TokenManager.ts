@@ -165,13 +165,15 @@ export class TokenManager {
 
     tokenContainer.addChild(base);
 
-    // Initial of name
+    // Emoji or initials label inside the token
+    const isEmoji = token.imageUrl?.startsWith('emoji:');
+    const labelText = isEmoji ? token.imageUrl!.slice(6) : token.name.slice(0, 2).toUpperCase();
     const initial = new Text({
-      text: token.name.slice(0, 2).toUpperCase(),
+      text: labelText,
       style: {
-        fontFamily: 'Cinzel',
-        fontSize: Math.max(10, radius * 0.7),
-        fill: token.colour,
+        fontFamily: isEmoji ? 'Arial' : 'Cinzel',
+        fontSize: isEmoji ? Math.max(12, radius * 0.85) : Math.max(10, radius * 0.7),
+        fill: isEmoji ? 0xffffff : token.colour,
         fontWeight: 'bold',
         align: 'center',
       },

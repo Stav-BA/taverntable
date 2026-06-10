@@ -31,75 +31,46 @@ export default function LandingPage() {
     <div
       className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden"
       style={{
-        background:
-          'radial-gradient(ellipse at 50% 30%, #3d2408 0%, #2d1b00 40%, #1a0f00 100%)',
+        backgroundImage: 'url(/tavern-table-logo.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
       }}
     >
-      {/* Floating dice background */}
-      <div className="dice-bg-container">
-        {diceRef.current.map((die, i) => (
-          <span
-            key={i}
-            className="floating-die"
-            style={{
-              left: `${die.left}%`,
-              animationDuration: `${die.duration}s`,
-              animationDelay: `${die.delay}s`,
-              fontSize: `${die.size}rem`,
-            }}
-          >
-            {die.symbol}
-          </span>
-        ))}
-      </div>
+      {/* Dark overlay so text stays readable */}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'rgba(0,0,0,0.55)' }}
+      />
 
-      {/* Vignette overlay */}
+      {/* Extra vignette at edges */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.6) 100%)',
+            'radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0,0,0,0.5) 100%)',
         }}
       />
 
       {/* Main content */}
       <div className="relative z-10 flex flex-col items-center gap-8 px-6 text-center max-w-3xl">
-        {/* Logo / Crest */}
-        <div className="flex flex-col items-center gap-2">
-          <div
-            className="w-24 h-24 flex items-center justify-center rounded-full border-4 border-gold"
-            style={{
-              background:
-                'radial-gradient(circle, #5c3d1e 0%, #2d1b00 100%)',
-              boxShadow:
-                '0 0 30px rgba(201,162,39,0.4), 0 0 60px rgba(201,162,39,0.15), inset 0 2px 4px rgba(255,255,255,0.1)',
-            }}
-          >
-            <span className="text-5xl" role="img" aria-label="tavern">
-              🍺
-            </span>
-          </div>
-          <div className="ornament-divider w-64">
-            <span className="font-cinzel text-gold text-sm tracking-widest">✦</span>
-          </div>
-        </div>
 
         {/* Title */}
         <div className="flex flex-col items-center gap-3">
           <h1
-            className="font-cinzel font-black text-6xl md:text-7xl leading-none"
+            className="font-cinzel font-black leading-none"
             style={{
+              fontSize: 'clamp(3rem, 8vw, 5.5rem)',
               color: '#F4E4BC',
               textShadow:
-                '0 0 30px rgba(201,162,39,0.5), 0 2px 4px rgba(0,0,0,0.8), 0 0 60px rgba(201,162,39,0.2)',
+                '0 0 40px rgba(201,162,39,0.7), 0 2px 8px rgba(0,0,0,0.9), 0 0 80px rgba(201,162,39,0.3)',
             }}
           >
-            Tavern
-            <span className="text-gold">Table</span>
+            Tavern<span style={{ color: '#c9a227' }}>Table</span>
           </h1>
           <p
-            className="font-cinzel text-lg md:text-xl tracking-wider"
-            style={{ color: 'rgba(244,228,188,0.8)' }}
+            className="font-cinzel tracking-wider"
+            style={{ fontSize: 'clamp(0.9rem, 2vw, 1.2rem)', color: 'rgba(244,228,188,0.85)' }}
           >
             D&D 5e Online Virtual Tabletop
           </p>
@@ -127,7 +98,7 @@ export default function LandingPage() {
         </div>
 
         {/* Feature list */}
-        <div className="grid grid-cols-3 gap-6 mt-8 opacity-70">
+        <div className="grid grid-cols-3 gap-6 mt-8" style={{ opacity: 0.85 }}>
           {[
             { icon: '🗡️', labelKey: 'landing.feature_combat' },
             { icon: '🌫️', labelKey: 'landing.feature_fog' },
@@ -137,7 +108,7 @@ export default function LandingPage() {
               <span className="text-3xl">{icon}</span>
               <span
                 className="font-cinzel text-xs tracking-widest uppercase"
-                style={{ color: 'rgba(201,162,39,0.7)' }}
+                style={{ color: 'rgba(201,162,39,0.9)' }}
               >
                 {t(labelKey)}
               </span>
@@ -150,7 +121,7 @@ export default function LandingPage() {
       <div className="absolute bottom-4 left-0 right-0 flex justify-center">
         <span
           className="font-crimson text-sm"
-          style={{ color: 'rgba(244,228,188,0.3)' }}
+          style={{ color: 'rgba(244,228,188,0.4)' }}
         >
           {t('landing.powered_by')}
         </span>

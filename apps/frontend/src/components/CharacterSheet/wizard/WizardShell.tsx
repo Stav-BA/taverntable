@@ -27,6 +27,41 @@ const STEP_LABELS = [
   'Ability Scores', 'Details', 'Equipment', 'Review',
 ];
 
+// Style helper functions extracted to avoid mixing CSSProperties and functions
+// in the same Record<string, CSSProperties> object.
+const stepDotStyle = (active: boolean, done: boolean): React.CSSProperties => ({
+  flex: 1,
+  height: 4,
+  borderRadius: 2,
+  background: done ? '#C9A227' : active ? '#8B6914' : '#5A3E1B',
+  transition: 'background 0.3s',
+});
+
+const stepLabelStyle = (active: boolean, done: boolean): React.CSSProperties => ({
+  flex: 1,
+  textAlign: 'center',
+  fontSize: 10,
+  color: done ? '#C9A227' : active ? '#F4E4BC' : '#8B6914',
+  fontFamily: "'Cinzel', serif",
+  letterSpacing: '0.03em',
+  transition: 'color 0.3s',
+});
+
+const continueBtnStyle = (disabled: boolean): React.CSSProperties => ({
+  background: disabled ? '#8B6914' : '#C9A227',
+  border: '2px solid #2D1B00',
+  color: '#2D1B00',
+  borderRadius: 4,
+  padding: '8px 28px',
+  cursor: disabled ? 'not-allowed' : 'pointer',
+  fontFamily: "'Cinzel', serif",
+  fontSize: 14,
+  fontWeight: 700,
+  letterSpacing: '0.05em',
+  opacity: disabled ? 0.6 : 1,
+  transition: 'background 0.2s',
+});
+
 const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed', inset: 0,
@@ -77,27 +112,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 4,
     alignItems: 'center',
   },
-  stepDot: (active: boolean, done: boolean): React.CSSProperties => ({
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    background: done ? '#C9A227' : active ? '#8B6914' : '#5A3E1B',
-    transition: 'background 0.3s',
-  }),
   stepLabels: {
     display: 'flex',
     padding: '0 24px 8px',
     background: '#2D1B00',
   },
-  stepLabel: (active: boolean, done: boolean): React.CSSProperties => ({
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 10,
-    color: done ? '#C9A227' : active ? '#F4E4BC' : '#8B6914',
-    fontFamily: "'Cinzel', serif",
-    letterSpacing: '0.03em',
-    transition: 'color 0.3s',
-  }),
   content: {
     flex: 1,
     overflowY: 'auto',
@@ -122,20 +141,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     letterSpacing: '0.05em',
   },
-  continueBtn: (disabled: boolean): React.CSSProperties => ({
-    background: disabled ? '#8B6914' : '#C9A227',
-    border: '2px solid #2D1B00',
-    color: '#2D1B00',
-    borderRadius: 4,
-    padding: '8px 28px',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontFamily: "'Cinzel', serif",
-    fontSize: 14,
-    fontWeight: 700,
-    letterSpacing: '0.05em',
-    opacity: disabled ? 0.6 : 1,
-    transition: 'background 0.2s',
-  }),
   stepCount: {
     fontFamily: "'Cinzel', serif",
     fontSize: 13,
@@ -199,12 +204,12 @@ export default function WizardShell({ onComplete, onCancel }: WizardShellProps) 
         {/* Progress Bar */}
         <div style={styles.progressBar}>
           {STEP_LABELS.map((_, i) => (
-            <div key={i} style={styles.stepDot(i === step, i < step)} />
+            <div key={i} style={stepDotStyle(i === step, i < step)} />
           ))}
         </div>
         <div style={styles.stepLabels}>
           {STEP_LABELS.map((label, i) => (
-            <span key={i} style={styles.stepLabel(i === step, i < step)}>{label}</span>
+            <span key={i} style={stepLabelStyle(i === step, i < step)}>{label}</span>
           ))}
         </div>
 
@@ -224,7 +229,7 @@ export default function WizardShell({ onComplete, onCancel }: WizardShellProps) 
           </button>
           <span style={styles.stepCount}>Step {step + 1} of {STEP_LABELS.length}</span>
           <button
-            style={styles.continueBtn(!canContinue && !isLastStep)}
+            style={continueBtnStyle(!canContinue && !isLastStep)}
             onClick={goNext}
             disabled={!canContinue && !isLastStep}
           >

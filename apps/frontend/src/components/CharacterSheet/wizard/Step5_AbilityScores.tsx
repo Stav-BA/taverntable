@@ -295,7 +295,7 @@ function StandardArrayMethod({ onAssign }: { onAssign: (scores: Record<AbilityKe
 function PointBuyMethod({ onAssign }: { onAssign: (scores: Record<AbilityKey, number>) => void }) {
   const [scores, setScores] = useState<Record<AbilityKey, number>>({ ...DEFAULT_SCORES });
 
-  const spent = pointBuySpent(scores);
+  const spent = pointBuySpent(scores as unknown as Parameters<typeof pointBuySpent>[0]);
   const remaining = POINT_BUY_BUDGET - spent;
 
   const changeScore = (key: AbilityKey, delta: number) => {

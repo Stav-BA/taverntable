@@ -67,11 +67,11 @@ async function bootstrap(): Promise<void> {
   // Connect to DB and Redis in the background — non-blocking
   prisma.$connect()
     .then(() => { dbReady = true; console.log('[Prisma] Connected to database'); })
-    .catch((err) => console.error('[Prisma] DB connection error:', err.message));
+    .catch((err: Error) => console.error('[Prisma] DB connection error:', err.message));
 
   redis.ping()
     .then(() => { redisReady = true; console.log('[Redis] Ping OK'); })
-    .catch((err) => console.error('[Redis] Ping error:', err.message));
+    .catch((err: Error) => console.error('[Redis] Ping error:', err.message));
 
   // Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {

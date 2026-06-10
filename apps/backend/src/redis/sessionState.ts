@@ -16,6 +16,7 @@ export interface Token {
   playerId?: string;
   conditions?: string[];
   isVisible?: boolean;
+  imageUrl?: string;
 }
 
 export interface RevealedArea {

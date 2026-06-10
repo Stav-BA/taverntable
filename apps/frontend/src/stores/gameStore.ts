@@ -28,6 +28,8 @@ export interface Token {
   ac: number;
   imageUrl?: string;
   isPlayer: boolean;
+  isNpc?: boolean;
+  isChest?: boolean;
   playerId?: string;
   conditions: Condition[];
   isVisible: boolean; // DM toggle for NPC visibility
