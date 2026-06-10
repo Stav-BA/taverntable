@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '@/stores/gameStore';
 import { useSessionStore } from '@/stores/sessionStore';
-import { socketEmit } from '@/lib/socket';
+import { socketEmit, getSocket } from '@/lib/socket';
 import CombatantRow from './CombatantRow';
 import type { Combatant } from '@/stores/gameStore';
 
@@ -512,6 +512,16 @@ export default function InitiativeTracker() {
   const isDM = useSessionStore((s) => s.isDM);
 
   const [showRollModal, setShowRollModal] = useState(false);
+
+  // Auto-open roll modal when encounter is launched (DM only)
+  useEffect(() => {
+    if (!isDM) return;
+    const socket = getSocket();
+    if (!socket) return;
+    const onRequested = () => setShowRollModal(true);
+    socket.on('initiative:requested', onRequested);
+    return () => { socket.off('initiative:requested', onRequested); };
+  }, [isDM]);
 
   const handleRollInitiative = () => {
     setShowRollModal(true);

@@ -1,12 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { Monster, useDMStore } from '@/stores/dmStore';
 import { useSessionStore } from '@/stores/sessionStore';
+import { useGameStore } from '@/stores/gameStore';
+import { getSocket, socketEmit } from '@/lib/socket';
 import { MonsterCard } from './MonsterCard';
 import {
   ENCOUNTER_XP_BUDGET,
   crToXP,
   getEncounterDifficulty,
 } from '@taverntable/dnd-rules';
+
+// Monster colour palette for tokens
+const MONSTER_COLOURS = ['#8b1a1a','#6b2d8b','#1a5c8b','#1a8b3c','#8b5a1a','#8b1a5c','#2d5c8b','#5c8b1a'];
+const MONSTER_EMOJIS: Record<string, string> = {
+  humanoid: '👤', undead: '💀', beast: '🐺', giant: '👹',
+  monstrosity: '🐉', aberration: '👁', dragon: '🐲', default: '👹',
+};
 
 export const QUICK_MONSTERS: Monster[] = [
   { slug: 'goblin',         name: 'Goblin',            cr: 0.25,  hp: 7,   ac: 15, type: 'humanoid',    xp: 50    },
@@ -120,6 +129,48 @@ export function EncounterBuilder() {
   const overwhelmWarning = totalCount > partySize * 2 && partyLevel <= 5;
 
   const handleLaunch = () => {
+    const socket = getSocket();
+    const sessionId = useSessionStore.getState().sessionId;
+    if (!sessionId || encounterMonsters.length === 0) return;
+
+    // 1. Spawn each monster as a token on the map
+    let colourIdx = 0;
+    const spawnedTokenIds: string[] = [];
+    encounterMonsters.forEach(({ monster, count }) => {
+      const emoji = MONSTER_EMOJIS[monster.type] ?? MONSTER_EMOJIS.default;
+      for (let i = 0; i < count; i++) {
+        const tokenId = `monster-${monster.slug}-${Date.now()}-${i}`;
+        const colour = MONSTER_COLOURS[colourIdx % MONSTER_COLOURS.length];
+        colourIdx++;
+        const name = count > 1 ? `${monster.name} ${i + 1}` : monster.name;
+        const token = {
+          id: tokenId,
+          x: 3 + i * 2,
+          y: 3 + Math.floor(i / 4) * 2,
+          name,
+          hp: monster.hp,
+          maxHp: monster.hp,
+          ac: monster.ac,
+          colour,
+          isNpc: true,
+          isPlayer: false,
+          imageUrl: `emoji:${emoji}`,
+          conditions: [] as never[],
+          isVisible: true,
+        };
+        useGameStore.getState().addToken(token);
+        socket.emit('token:add', { ...token, sessionId });
+        spawnedTokenIds.push(tokenId);
+      }
+    });
+
+    // 2. Emit combat:start so all clients know combat began
+    socketEmit.combatStart();
+
+    // 3. Request initiative roll — DM's InitiativeTracker will open the roll modal
+    socket.emit('initiative:request', { sessionId });
+
+    // 4. Journal entry
     const monsterList = encounterMonsters.map((e) => `${e.count}x ${e.monster.name}`).join(', ');
     addJournalEntry({
       sessionNumber: currentSession,
@@ -128,7 +179,6 @@ export function EncounterBuilder() {
       tags: ['combat'],
       characterTags: [],
     });
-    console.log('[Encounter] Launched:', encounterMonsters);
   };
 
   const handleSave = () => {
