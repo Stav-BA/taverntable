@@ -1,9 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useCharacterStore } from '@/stores/characterStore';
 import { socketEmit } from '@/lib/socket';
 import type { ClassName } from '@/lib/classes5e';
+import { getClassGear, buildEquipmentList } from '@/lib/startingGear5e';
+import type { GearOption } from '@/lib/startingGear5e';
+import type { EquipmentItem as WizardEquipItem } from '@/components/CharacterSheet/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -939,6 +942,171 @@ function StepFinalize({
   );
 }
 
+// ─── Step 5: Equipment ─────────────────────────────────────────────────────────
+
+function GearOptionCard({ option, selected, onClick }: { option: GearOption; selected: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%',
+        padding: '8px 10px', borderRadius: 4, cursor: 'pointer', textAlign: 'left',
+        background: selected ? 'rgba(201,162,39,0.18)' : 'rgba(45,27,0,0.5)',
+        border: selected ? `2px solid ${S.gold}` : '2px solid rgba(201,162,39,0.2)',
+        boxShadow: selected ? '0 0 10px rgba(201,162,39,0.25)' : 'none',
+        transition: 'all 0.15s',
+        color: S.cream,
+      }}
+    >
+      <div style={{
+        width: 14, height: 14, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+        border: `2px solid ${selected ? S.gold : 'rgba(201,162,39,0.4)'}`,
+        background: selected ? S.gold : 'transparent',
+      }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.8rem', color: selected ? S.gold : S.cream, fontWeight: selected ? 700 : 600, marginBottom: 3 }}>
+          {option.label}
+        </div>
+        {option.items.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {option.items.map(it => (
+              <span
+                key={it.id}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                  background: selected ? 'rgba(201,162,39,0.15)' : 'rgba(45,27,0,0.6)',
+                  border: `1px solid ${selected ? 'rgba(201,162,39,0.4)' : 'rgba(201,162,39,0.15)'}`,
+                  borderRadius: 3, padding: '2px 6px',
+                  fontFamily: 'Crimson Text, serif', fontSize: '0.75rem', color: S.creamDim,
+                }}
+              >
+                {it.isWeapon ? '⚔️' : it.isArmor ? '🛡️' : '📦'}
+                <span>{it.name}{it.quantity > 1 ? ` ×${it.quantity}` : ''}</span>
+                {it.isWeapon && it.weaponData && (
+                  <span style={{ color: '#ff9999', fontStyle: 'italic' }}>{it.weaponData.damage}</span>
+                )}
+                {it.isArmor && it.armorData && (
+                  <span style={{ color: '#aaffaa', fontStyle: 'italic' }}>AC {it.armorData.baseAC}</span>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function StepEquipment({
+  className: cn,
+  selections,
+  setSelections,
+}: {
+  className: string;
+  selections: Record<string, string>;
+  setSelections: (s: Record<string, string>) => void;
+}) {
+  const gear = useMemo(() => getClassGear(cn), [cn]);
+
+  // Reset selections when class changes
+  useEffect(() => { setSelections({}); }, [cn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!gear) {
+    return (
+      <div>
+        <StepHeader title="Starting Equipment" subtitle="No gear data found — please go back and pick a class." />
+      </div>
+    );
+  }
+
+  const totalChoices = gear.choices.length;
+  const madeChoices = gear.choices.filter(c => selections[c.id] != null).length;
+
+  return (
+    <div>
+      <StepHeader title="Starting Equipment" subtitle={`As a ${cn}, choose your starting gear.`} />
+
+      {/* Mini progress */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.9rem', justifyContent: 'center' }}>
+        {gear.choices.map(c => (
+          <div key={c.id} style={{ width: 24, height: 4, borderRadius: 2, background: selections[c.id] ? S.gold : 'rgba(201,162,39,0.2)', transition: 'background 0.2s' }} />
+        ))}
+        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: S.goldDim, marginLeft: 4 }}>
+          {madeChoices}/{totalChoices} chosen
+        </span>
+      </div>
+
+      {/* Choice groups */}
+      <div style={{ maxHeight: 340, overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {gear.choices.map((choice, i) => (
+          <div key={choice.id}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <div style={{
+                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                background: selections[choice.id] ? S.gold : 'rgba(201,162,39,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'Cinzel, serif', fontSize: '0.65rem', fontWeight: 700,
+                color: selections[choice.id] ? S.bgDark : S.goldDim,
+                transition: 'all 0.2s',
+              }}>
+                {selections[choice.id] ? '✓' : i + 1}
+              </div>
+              <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.78rem', color: S.creamDim, fontWeight: 600 }}>
+                {choice.prompt}
+              </span>
+              {!selections[choice.id] && (
+                <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.6rem', color: '#ff7777', marginLeft: 'auto' }}>Required</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingLeft: 26 }}>
+              {choice.options.map(opt => (
+                <GearOptionCard
+                  key={opt.id}
+                  option={opt}
+                  selected={selections[choice.id] === opt.id}
+                  onClick={() => setSelections({ ...selections, [choice.id]: opt.id })}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* Guaranteed items */}
+        {gear.guaranteed.length > 0 && (
+          <div style={{ background: 'rgba(201,162,39,0.06)', border: '1px solid rgba(201,162,39,0.2)', borderRadius: 4, padding: '0.6rem 0.75rem' }}>
+            <p style={{ fontFamily: 'Cinzel, serif', fontSize: '0.65rem', color: S.gold, marginBottom: 6 }}>ALWAYS INCLUDED</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {gear.guaranteed.map(it => (
+                <span
+                  key={it.id}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    background: 'rgba(201,162,39,0.12)', border: '1px solid rgba(201,162,39,0.35)',
+                    borderRadius: 3, padding: '2px 7px',
+                    fontFamily: 'Crimson Text, serif', fontSize: '0.8rem', color: S.cream,
+                  }}
+                >
+                  {it.isWeapon ? '⚔️' : it.isArmor ? '🛡️' : '📦'} {it.name}{it.quantity > 1 ? ` ×${it.quantity}` : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Completion banner */}
+        {madeChoices === totalChoices && (
+          <div style={{ padding: '8px 12px', borderRadius: 4, textAlign: 'center', background: 'rgba(50,120,50,0.15)', border: '1px solid rgba(100,200,100,0.3)' }}>
+            <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.78rem', color: '#88dd88', fontWeight: 700 }}>
+              ✅ Equipment ready — click Next to finalize!
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Shared StepHeader ─────────────────────────────────────────────────────────
 
 function StepHeader({ title, subtitle }: { title: string; subtitle: string }) {
@@ -957,7 +1125,7 @@ function StepHeader({ title, subtitle }: { title: string; subtitle: string }) {
 // ─── Progress Bar ──────────────────────────────────────────────────────────────
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
-  const labels = ['Race', 'Class', 'Scores', 'Background', 'Finalize'];
+  const labels = ['Race', 'Class', 'Scores', 'Background', 'Gear', 'Finalize'];
   return (
     <div style={{ marginBottom: '1.25rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -1003,8 +1171,9 @@ export default function CharacterCreationModal({ onClose, onComplete }: { onClos
   const player = useSessionStore((s) => s.player);
   const addToken = useGameStore((s) => s.addToken);
   const initSheet = useCharacterStore((s) => s.initSheet);
+  const updateSheet = useCharacterStore((s) => s.updateSheet);
 
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 6;
   const [step, setStep] = useState(0);
 
   // Step 1
@@ -1016,7 +1185,9 @@ export default function CharacterCreationModal({ onClose, onComplete }: { onClos
   const [assignments, setAssignments] = useState<Partial<Record<AbilityKey, number>>>({});
   // Step 4
   const [backgroundName, setBackgroundName] = useState('Folk Hero');
-  // Step 5
+  // Step 5 — Gear
+  const [gearSelections, setGearSelections] = useState<Record<string, string>>({});
+  // Step 6
   const [name, setName] = useState(player?.characterName || player?.name || '');
   const [colour, setColour] = useState(player?.colour || TOKEN_COLOURS[1]);
   const [description, setDescription] = useState('');
@@ -1026,9 +1197,14 @@ export default function CharacterCreationModal({ onClose, onComplete }: { onClos
     if (step === 1) return !!className;
     if (step === 2) return ABILITY_KEYS.every(ab => assignments[ab] !== undefined) && rolledScores.length === 6;
     if (step === 3) return !!backgroundName;
-    if (step === 4) return !!name.trim();
+    if (step === 4) {
+      const gear = getClassGear(className);
+      if (!gear) return true; // no data for class → skip
+      return gear.choices.every(c => gearSelections[c.id] != null);
+    }
+    if (step === 5) return !!name.trim();
     return false;
-  }, [step, raceName, className, assignments, rolledScores, backgroundName, name]);
+  }, [step, raceName, className, assignments, rolledScores, backgroundName, gearSelections, name]);
 
   const handleSubmit = () => {
     if (!player || !name.trim()) return;
@@ -1078,6 +1254,48 @@ export default function CharacterCreationModal({ onClose, onComplete }: { onClos
 
     // Initialize character sheet in the store so CharacterSheetModal has data
     initSheet(player.id, name.trim(), player.name, className as ClassName);
+
+    // Apply chosen starting gear to the character sheet
+    const gear = getClassGear(className);
+    if (gear) {
+      const wizardItems: WizardEquipItem[] = buildEquipmentList(gear, gearSelections);
+      // Convert from wizard EquipmentItem format → characterStore EquipmentItem format
+      const storeItems = wizardItems.map(it => {
+        if (it.isWeapon && it.weaponData) {
+          return {
+            id: it.id,
+            name: it.name,
+            quantity: it.quantity,
+            weight: it.weight,
+            type: 'weapon' as const,
+            equipped: true,
+            weaponId: it.id,
+            damageDice: it.weaponData.damage,
+            damageType: it.weaponData.damageType,
+            attackBonus: 0,
+          };
+        }
+        if (it.isArmor && it.armorData) {
+          return {
+            id: it.id,
+            name: it.name,
+            quantity: it.quantity,
+            weight: it.weight,
+            type: 'armor' as const,
+            equipped: true,
+            armorId: it.id,
+          };
+        }
+        return {
+          id: it.id,
+          name: it.name,
+          quantity: it.quantity,
+          weight: it.weight,
+          type: 'misc' as const,
+        };
+      });
+      updateSheet(player.id, { equipment: storeItems });
+    }
 
     onClose?.();
     onComplete?.();
@@ -1140,6 +1358,13 @@ export default function CharacterCreationModal({ onClose, onComplete }: { onClos
           )}
           {step === 3 && <StepBackground selected={backgroundName} onSelect={setBackgroundName} />}
           {step === 4 && (
+            <StepEquipment
+              className={className}
+              selections={gearSelections}
+              setSelections={setGearSelections}
+            />
+          )}
+          {step === 5 && (
             <StepFinalize
               name={name} setName={setName}
               colour={colour} setColour={setColour}
@@ -1192,7 +1417,7 @@ export default function CharacterCreationModal({ onClose, onComplete }: { onClos
               transition: 'all 0.15s ease',
             }}
           >
-            {step === TOTAL_STEPS - 1 ? 'Enter the Adventure' : `Next: ${['Class', 'Scores', 'Background', 'Finalize', ''][step]}`}
+            {step === TOTAL_STEPS - 1 ? 'Enter the Adventure' : `Next: ${['Class', 'Scores', 'Background', 'Gear', 'Finalize', ''][step]}`}
           </button>
         </div>
       </div>
