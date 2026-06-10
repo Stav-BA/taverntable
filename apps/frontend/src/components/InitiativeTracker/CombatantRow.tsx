@@ -393,7 +393,11 @@ export default function CombatantRow({ combatant, isCurrentTurn, index, onEndTur
   const tokens = useGameStore((s) => s.tokens);
   const sheets = useCharacterStore((s) => s.sheets);
 
-  const isMyToken = !isDM && player != null && combatant.isPlayer && combatant.tokenId === player.id;
+  // tokenId is "player-{player.id}" (set in CharacterCreationModal as `player-${player.id}`)
+  // Also handle the case where tokenId equals player.id directly (fallback)
+  const myToken = tokens.find((t) => t.playerId === player?.id);
+  const isMyToken = !isDM && player != null && combatant.isPlayer &&
+    (combatant.tokenId === `player-${player.id}` || combatant.tokenId === player.id || (myToken != null && combatant.tokenId === myToken.id));
   const canControl = isDM || isMyToken;
   const isDead = combatant.hp <= 0;
 

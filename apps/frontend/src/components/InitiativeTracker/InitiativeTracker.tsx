@@ -91,7 +91,7 @@ function InitiativeRollModal({
   onCancel,
 }: {
   tokens: Array<{ id: string; name: string; colour: string; isPlayer: boolean; hp: number; maxHp: number; ac: number }>;
-  playerSubmissions?: Array<{ id: string; name: string; total: number; colour: string }>;
+  playerSubmissions?: Array<{ id: string; name: string; roll: number; dexMod: number; total: number; colour: string }>;
   onRequestRolls?: () => void;
   onConfirm: (entries: RollEntry[]) => void;
   onCancel: () => void;
@@ -112,6 +112,20 @@ function InitiativeRollModal({
       speed: 30,
     }))
   );
+
+  // Auto-fill player entries when their submissions arrive from the server
+  useEffect(() => {
+    if (!playerSubmissions || playerSubmissions.length === 0) return;
+    setEntries((prev) =>
+      prev.map((e) => {
+        const sub = playerSubmissions.find((ps) => ps.id === e.id);
+        if (sub && e.roll === null) {
+          return { ...e, roll: sub.roll, dexMod: sub.dexMod };
+        }
+        return e;
+      })
+    );
+  }, [playerSubmissions]);
 
   const [showAddNpc, setShowAddNpc] = useState(false);
   const [npcName, setNpcName] = useState('');
@@ -641,7 +655,16 @@ export default function InitiativeTracker() {
   const handleRollInitiative = () => setShowRollModal(true);
 
   const handleModalConfirm = (entries: RollEntry[]) => {
-    const combatantsPayload = entries.map((e) => ({
+    // Merge any player submissions that the modal may not have received via useEffect
+    const mergedEntries = entries.map((e) => {
+      if (e.isPlayer && e.roll === null) {
+        const sub = submissions.find((s) => s.id === e.id && s.isPlayer);
+        if (sub) return { ...e, roll: sub.roll, dexMod: sub.dexMod };
+      }
+      return e;
+    });
+
+    const combatantsPayload = mergedEntries.map((e) => ({
       id: e.id,
       name: e.name,
       roll: e.roll ?? 0,
@@ -881,7 +904,7 @@ export default function InitiativeTracker() {
           tokens={tokenList}
           playerSubmissions={submissions
             .filter((s) => s.isPlayer)
-            .map((s) => ({ id: s.id, name: s.name, total: s.total, colour: s.colour }))}
+            .map((s) => ({ id: s.id, name: s.name, roll: s.roll, dexMod: s.dexMod, total: s.total, colour: s.colour }))}
           onRequestRolls={() => {
             const socket = getSocket();
             if (!socket) return;
