@@ -327,7 +327,7 @@ function FloatingDie({ die }: { die: DieConfig }) {
       }}>
         <div style={{
           width: '100%', height: '100%',
-          animation: `${rotId} ${die.duration * 0.9}s ${die.delay}s linear infinite`,
+          animation: `${rotId} ${die.duration * 5}s ${die.delay}s linear infinite`,
           willChange: 'transform',
         }}>
           <ShapeComp id={die.id} pal={pal} label={label} />
