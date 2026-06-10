@@ -2,145 +2,335 @@ import { useNavigate } from 'react-router-dom';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-// ─── Floating 3D Dice ──────────────────────────────────────────────────────────
+// ─── Polyhedral Dice SVG System ────────────────────────────────────────────────
 
-const DICE_COLORS = [
-  // face-bg, face-border, pip/label color
-  ['rgba(180,30,30,0.55)',   'rgba(220,80,80,0.6)',   '#ffcccc'],  // red
-  ['rgba(30,60,180,0.55)',   'rgba(80,120,220,0.6)',  '#ccd8ff'],  // blue
-  ['rgba(20,120,60,0.55)',   'rgba(60,180,100,0.6)',  '#ccffdd'],  // green
-  ['rgba(120,20,160,0.55)',  'rgba(180,80,220,0.6)',  '#f0ccff'],  // purple
-  ['rgba(180,130,10,0.55)',  'rgba(220,180,40,0.6)',  '#fff5cc'],  // gold
-  ['rgba(20,140,160,0.55)',  'rgba(60,200,220,0.6)',  '#ccf8ff'],  // teal
-  ['rgba(180,80,20,0.55)',   'rgba(230,130,60,0.6)',  '#ffe5cc'],  // orange
-  ['rgba(160,10,80,0.55)',   'rgba(220,60,140,0.6)',  '#ffccee'],  // rose
-];
-
-const DIE_LABELS = ['4', '6', '8', '10', '12', '20', '100', '%'];
-
-interface DieConfig {
-  id: number;
-  left: number;         // % across screen
-  bottom: number;       // % start position (below fold for upward drift)
-  size: number;         // px side length
-  driftX: number;       // horizontal sway amplitude px
-  duration: number;     // total float duration s
-  delay: number;        // animation delay s
-  rotX: number;         // starting rotateX deg
-  rotY: number;         // starting rotateY deg
-  rotSpeedX: number;    // deg/s rotate X
-  rotSpeedY: number;    // deg/s rotate Y
-  colorIdx: number;
-  label: string;
-}
-
-function seeded(seed: number, min: number, max: number) {
-  // deterministic-ish pseudo-random from index seed
+// Deterministic pseudo-random (seed-based so SSR and client match)
+function sr(seed: number, min: number, max: number) {
   const x = Math.sin(seed * 9301 + 49297) * 233280;
   return min + (x - Math.floor(x)) * (max - min);
 }
 
-function makeDice(count: number): DieConfig[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    left:       seeded(i * 1,  2, 98),
-    bottom:     seeded(i * 2, -40, -5),
-    size:       seeded(i * 3, 36, 72),
-    driftX:     seeded(i * 4, -60, 60),
-    duration:   seeded(i * 5, 18, 38),
-    delay:      seeded(i * 6, 0, 20),
-    rotX:       seeded(i * 7, 0, 360),
-    rotY:       seeded(i * 8, 0, 360),
-    rotSpeedX:  seeded(i * 9, 30, 90) * (i % 2 === 0 ? 1 : -1),
-    rotSpeedY:  seeded(i * 10, 20, 70) * (i % 3 === 0 ? 1 : -1),
-    colorIdx:   Math.abs(Math.floor(seeded(i * 11, 0, 100))) % DICE_COLORS.length,
-    label:      DIE_LABELS[Math.abs(Math.floor(seeded(i * 12, 0, 100))) % DIE_LABELS.length],
-  }));
+// ── Colour palettes ── each is [gradStop1, gradStop2, glowColor, numberColor]
+const PALETTES = [
+  // Galaxy Blue (like the reference image)
+  ['#0a0a2e', '#1a1a6e', '#3a3adf', '#c8922a'],
+  // Dragon Blood Red
+  ['#1a0000', '#6e0000', '#cc1111', '#f5c842'],
+  // Forest Emerald
+  ['#001a05', '#004d15', '#00aa44', '#d4af37'],
+  // Amethyst Purple
+  ['#0f001a', '#3d0066', '#9933cc', '#e8c0ff'],
+  // Obsidian & Gold
+  ['#0a0a0a', '#1c1c1c', '#555555', '#c9a227'],
+  // Ocean Abyss
+  ['#001a1a', '#004444', '#009999', '#f0e68c'],
+  // Sunset Ember
+  ['#1a0500', '#6e2000', '#cc6600', '#ffe090'],
+  // Arctic Ice
+  ['#001020', '#003060', '#0080cc', '#aaeeff'],
+];
+
+// ── Sparkle dots (galaxy shimmer effect) ──────────────────────────────────────
+function Sparkles({ id, count, glow }: { id: number; count: number; glow: string }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => {
+        const cx = sr(id * 100 + i * 7, 15, 85);
+        const cy = sr(id * 100 + i * 13, 15, 85);
+        const r  = sr(id * 100 + i * 17, 0.4, 1.4);
+        const op = sr(id * 100 + i * 23, 0.3, 1.0);
+        return (
+          <circle key={i} cx={cx} cy={cy} r={r}
+            fill="white" opacity={op}
+            filter={`url(#glow${id})`}
+          />
+        );
+      })}
+    </>
+  );
 }
 
-const DICE_DATA = makeDice(22);
+// ── SVG die shapes ─────────────────────────────────────────────────────────────
 
-function Cube({ die }: { die: DieConfig }) {
-  const [bg, border, pip] = DICE_COLORS[die.colorIdx];
-  const s = die.size;
-  const half = s / 2;
+// d4 — equilateral triangle
+function D4Shape({ id, pal, label }: { id: number; pal: string[]; label: string }) {
+  const [c1, c2, glow, num] = pal;
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%">
+      <defs>
+        <radialGradient id={`g${id}`} cx="50%" cy="60%" r="55%">
+          <stop offset="0%" stopColor={c2} />
+          <stop offset="100%" stopColor={c1} />
+        </radialGradient>
+        <filter id={`glow${id}`}><feGaussianBlur stdDeviation="1" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      {/* Main triangle */}
+      <polygon points="50,8 94,88 6,88" fill={`url(#g${id})`} stroke={glow} strokeWidth="1.5" strokeOpacity="0.7"/>
+      {/* Inner highlight triangle */}
+      <polygon points="50,22 82,78 18,78" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1"/>
+      {/* Sparkles */}
+      <clipPath id={`clip${id}`}><polygon points="50,8 94,88 6,88"/></clipPath>
+      <g clipPath={`url(#clip${id})`}><Sparkles id={id} count={18} glow={glow}/></g>
+      {/* Number */}
+      <text x="50" y="76" textAnchor="middle" fontSize="22" fontWeight="bold"
+        fontFamily="Cinzel,serif" fill={num} style={{ filter: `drop-shadow(0 0 3px ${glow})` }}>
+        {label}
+      </text>
+    </svg>
+  );
+}
 
-  const faceStyle = (tx: number, ty: number, tz: number, rx: number, ry: number): React.CSSProperties => ({
-    position: 'absolute',
-    width: s, height: s,
-    background: bg,
-    border: `1.5px solid ${border}`,
-    boxSizing: 'border-box',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    backfaceVisibility: 'hidden',
-    transform: `translateX(${tx}px) translateY(${ty}px) translateZ(${tz}px) rotateX(${rx}deg) rotateY(${ry}deg)`,
-  });
+// d6 — square with bevelled look
+function D6Shape({ id, pal, label }: { id: number; pal: string[]; label: string }) {
+  const [c1, c2, glow, num] = pal;
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%">
+      <defs>
+        <radialGradient id={`g${id}`} cx="40%" cy="40%" r="65%">
+          <stop offset="0%" stopColor={c2} />
+          <stop offset="100%" stopColor={c1} />
+        </radialGradient>
+        <filter id={`glow${id}`}><feGaussianBlur stdDeviation="1"/></filter>
+      </defs>
+      {/* Shadow */}
+      <rect x="14" y="14" width="74" height="74" rx="8" fill="rgba(0,0,0,0.4)" transform="translate(3,3)"/>
+      {/* Main face */}
+      <rect x="14" y="14" width="74" height="74" rx="8" fill={`url(#g${id})`} stroke={glow} strokeWidth="1.5" strokeOpacity="0.8"/>
+      {/* Top-left highlight bevel */}
+      <rect x="14" y="14" width="74" height="74" rx="8" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="2.5" strokeDasharray="40 200" strokeDashoffset="-5"/>
+      {/* Inner frame */}
+      <rect x="20" y="20" width="62" height="62" rx="5" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/>
+      {/* Sparkles */}
+      <clipPath id={`clip${id}`}><rect x="14" y="14" width="74" height="74" rx="8"/></clipPath>
+      <g clipPath={`url(#clip${id})`}><Sparkles id={id} count={22} glow={glow}/></g>
+      {/* Number */}
+      <text x="51" y="58" textAnchor="middle" fontSize="28" fontWeight="bold"
+        fontFamily="Cinzel,serif" fill={num} style={{ filter: `drop-shadow(0 0 4px ${glow})` }}>
+        {label}
+      </text>
+    </svg>
+  );
+}
 
-  const labelStyle: React.CSSProperties = {
-    fontFamily: 'Cinzel, serif',
-    fontSize: s * 0.28,
-    fontWeight: 700,
-    color: pip,
-    userSelect: 'none',
-    lineHeight: 1,
-  };
+// d8 — diamond / octahedron top-view
+function D8Shape({ id, pal, label }: { id: number; pal: string[]; label: string }) {
+  const [c1, c2, glow, num] = pal;
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%">
+      <defs>
+        <radialGradient id={`g${id}`} cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stopColor={c2} />
+          <stop offset="100%" stopColor={c1} />
+        </radialGradient>
+        <filter id={`glow${id}`}><feGaussianBlur stdDeviation="1"/></filter>
+      </defs>
+      {/* Shadow */}
+      <polygon points="50,7 93,50 50,93 7,50" fill="rgba(0,0,0,0.35)" transform="translate(3,3)"/>
+      {/* Main diamond */}
+      <polygon points="50,7 93,50 50,93 7,50" fill={`url(#g${id})`} stroke={glow} strokeWidth="1.5" strokeOpacity="0.8"/>
+      {/* Cross dividers — octahedron face lines */}
+      <line x1="50" y1="7" x2="50" y2="93" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/>
+      <line x1="7" y1="50" x2="93" y2="50" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/>
+      {/* Inner diamond */}
+      <polygon points="50,22 78,50 50,78 22,50" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1"/>
+      {/* Sparkles */}
+      <clipPath id={`clip${id}`}><polygon points="50,7 93,50 50,93 7,50"/></clipPath>
+      <g clipPath={`url(#clip${id})`}><Sparkles id={id} count={20} glow={glow}/></g>
+      {/* Number */}
+      <text x="50" y="56" textAnchor="middle" fontSize="22" fontWeight="bold"
+        fontFamily="Cinzel,serif" fill={num} style={{ filter: `drop-shadow(0 0 3px ${glow})` }}>
+        {label}
+      </text>
+    </svg>
+  );
+}
 
-  // keyframe names must be unique per die to avoid collision
-  const animName = `floatDie${die.id}`;
-  const rotAnimName = `rotateDie${die.id}`;
+// d10 — elongated kite
+function D10Shape({ id, pal, label }: { id: number; pal: string[]; label: string }) {
+  const [c1, c2, glow, num] = pal;
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%">
+      <defs>
+        <radialGradient id={`g${id}`} cx="50%" cy="40%" r="55%">
+          <stop offset="0%" stopColor={c2} />
+          <stop offset="100%" stopColor={c1} />
+        </radialGradient>
+        <filter id={`glow${id}`}><feGaussianBlur stdDeviation="1"/></filter>
+      </defs>
+      {/* Shadow */}
+      <polygon points="50,5 90,42 50,95 10,42" fill="rgba(0,0,0,0.35)" transform="translate(3,3)"/>
+      {/* Main kite */}
+      <polygon points="50,5 90,42 50,95 10,42" fill={`url(#g${id})`} stroke={glow} strokeWidth="1.5" strokeOpacity="0.8"/>
+      {/* Divider lines */}
+      <line x1="50" y1="5" x2="50" y2="95" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/>
+      <line x1="10" y1="42" x2="90" y2="42" stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
+      {/* Sparkles */}
+      <clipPath id={`clip${id}`}><polygon points="50,5 90,42 50,95 10,42"/></clipPath>
+      <g clipPath={`url(#clip${id})`}><Sparkles id={id} count={18} glow={glow}/></g>
+      {/* Number */}
+      <text x="50" y="57" textAnchor="middle" fontSize="20" fontWeight="bold"
+        fontFamily="Cinzel,serif" fill={num} style={{ filter: `drop-shadow(0 0 3px ${glow})` }}>
+        {label}
+      </text>
+    </svg>
+  );
+}
+
+// d12 — pentagon
+function D12Shape({ id, pal, label }: { id: number; pal: string[]; label: string }) {
+  const [c1, c2, glow, num] = pal;
+  // Regular pentagon points
+  const pts = Array.from({ length: 5 }, (_, i) => {
+    const a = (i * 72 - 90) * Math.PI / 180;
+    return `${50 + 44 * Math.cos(a)},${50 + 44 * Math.sin(a)}`;
+  }).join(' ');
+  const innerPts = Array.from({ length: 5 }, (_, i) => {
+    const a = (i * 72 - 90) * Math.PI / 180;
+    return `${50 + 32 * Math.cos(a)},${50 + 32 * Math.sin(a)}`;
+  }).join(' ');
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%">
+      <defs>
+        <radialGradient id={`g${id}`} cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stopColor={c2} />
+          <stop offset="100%" stopColor={c1} />
+        </radialGradient>
+        <filter id={`glow${id}`}><feGaussianBlur stdDeviation="1"/></filter>
+      </defs>
+      <polygon points={pts} fill="rgba(0,0,0,0.35)" transform="translate(3,3)"/>
+      <polygon points={pts} fill={`url(#g${id})`} stroke={glow} strokeWidth="1.5" strokeOpacity="0.8"/>
+      <polygon points={innerPts} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1"/>
+      <clipPath id={`clip${id}`}><polygon points={pts}/></clipPath>
+      <g clipPath={`url(#clip${id})`}><Sparkles id={id} count={22} glow={glow}/></g>
+      <text x="50" y="55" textAnchor="middle" fontSize="20" fontWeight="bold"
+        fontFamily="Cinzel,serif" fill={num} style={{ filter: `drop-shadow(0 0 3px ${glow})` }}>
+        {label}
+      </text>
+    </svg>
+  );
+}
+
+// d20 — irregular hexagon (icosahedron top view)
+function D20Shape({ id, pal, label }: { id: number; pal: string[]; label: string }) {
+  const [c1, c2, glow, num] = pal;
+  // Slightly irregular hexagon (more like a d20 face)
+  const pts = Array.from({ length: 6 }, (_, i) => {
+    const a = (i * 60 - 30) * Math.PI / 180;
+    const r = i % 2 === 0 ? 45 : 42;
+    return `${50 + r * Math.cos(a)},${50 + r * Math.sin(a)}`;
+  }).join(' ');
+  const innerPts = Array.from({ length: 6 }, (_, i) => {
+    const a = (i * 60 - 30) * Math.PI / 180;
+    const r = i % 2 === 0 ? 32 : 29;
+    return `${50 + r * Math.cos(a)},${50 + r * Math.sin(a)}`;
+  }).join(' ');
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%">
+      <defs>
+        <radialGradient id={`g${id}`} cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stopColor={c2} />
+          <stop offset="100%" stopColor={c1} />
+        </radialGradient>
+        <filter id={`glow${id}`}><feGaussianBlur stdDeviation="1"/></filter>
+      </defs>
+      <polygon points={pts} fill="rgba(0,0,0,0.35)" transform="translate(3,3)"/>
+      <polygon points={pts} fill={`url(#g${id})`} stroke={glow} strokeWidth="1.5" strokeOpacity="0.8"/>
+      {/* Triangular face lines */}
+      {Array.from({ length: 6 }, (_, i) => {
+        const a = (i * 60 - 30) * Math.PI / 180;
+        const r = i % 2 === 0 ? 45 : 42;
+        return <line key={i} x1="50" y1="50" x2={50 + r * Math.cos(a)} y2={50 + r * Math.sin(a)} stroke="rgba(255,255,255,0.08)" strokeWidth="0.8"/>;
+      })}
+      <polygon points={innerPts} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1"/>
+      <clipPath id={`clip${id}`}><polygon points={pts}/></clipPath>
+      <g clipPath={`url(#clip${id})`}><Sparkles id={id} count={24} glow={glow}/></g>
+      <text x="50" y="56" textAnchor="middle" fontSize="22" fontWeight="bold"
+        fontFamily="Cinzel,serif" fill={num} style={{ filter: `drop-shadow(0 0 4px ${glow})` }}>
+        {label}
+      </text>
+    </svg>
+  );
+}
+
+// ── Die config & floating animation ───────────────────────────────────────────
+
+type DieType = 'd4' | 'd6' | 'd8' | 'd10' | 'd12' | 'd20';
+
+interface DieConfig {
+  id: number;
+  type: DieType;
+  left: number;
+  size: number;
+  driftX: number;
+  duration: number;
+  delay: number;
+  startRot: number;
+  rotSpeed: number;
+  palIdx: number;
+}
+
+const DIE_TYPES: DieType[] = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+const DIE_LABELS_MAP: Record<DieType, string[]> = {
+  d4:  ['3', '4', '2'],
+  d6:  ['4', '6', '5', '1'],
+  d8:  ['7', '8', '3', '5'],
+  d10: ['10', '7', '4', '0'],
+  d12: ['11', '12', '6', '9'],
+  d20: ['20', '17', '13', '8'],
+};
+
+const DICE_DATA: DieConfig[] = Array.from({ length: 24 }, (_, i) => ({
+  id: i,
+  type:      DIE_TYPES[Math.abs(Math.floor(sr(i * 3,  0, 100))) % DIE_TYPES.length],
+  left:      sr(i * 1,  2, 97),
+  size:      sr(i * 7,  48, 92),
+  driftX:    sr(i * 4, -70, 70),
+  duration:  sr(i * 5,  22, 45),
+  delay:    -sr(i * 6,  0, 44),   // negative = start mid-animation
+  startRot:  sr(i * 8,  0, 360),
+  rotSpeed:  sr(i * 9, 25, 80) * (i % 2 === 0 ? 1 : -1),
+  palIdx:    Math.abs(Math.floor(sr(i * 11, 0, 100))) % PALETTES.length,
+}));
+
+function FloatingDie({ die }: { die: DieConfig }) {
+  const pal     = PALETTES[die.palIdx];
+  const labels  = DIE_LABELS_MAP[die.type];
+  const label   = labels[Math.abs(Math.floor(sr(die.id * 17, 0, 100))) % labels.length];
+  const opacity = sr(die.id * 13, 0.30, 0.55);
+  const animId  = `fdie${die.id}`;
+  const rotId   = `rdie${die.id}`;
+
+  const ShapeComp = { d4: D4Shape, d6: D6Shape, d8: D8Shape, d10: D10Shape, d12: D12Shape, d20: D20Shape }[die.type];
 
   return (
     <>
       <style>{`
-        @keyframes ${animName} {
-          0%   { transform: translateX(0px)           translateY(0px); }
-          25%  { transform: translateX(${die.driftX * 0.5}px) translateY(${-window.innerHeight * 0.25}px); }
-          50%  { transform: translateX(${die.driftX}px)        translateY(${-window.innerHeight * 0.55}px); }
-          75%  { transform: translateX(${die.driftX * 0.3}px)  translateY(${-window.innerHeight * 0.78}px); }
-          100% { transform: translateX(0px)           translateY(${-window.innerHeight * 1.15}px); }
+        @keyframes ${animId} {
+          0%   { transform: translateX(0)                    translateY(110vh); }
+          100% { transform: translateX(${die.driftX}px)      translateY(-20vh); }
         }
-        @keyframes ${rotAnimName} {
-          0%   { transform: rotateX(${die.rotX}deg) rotateY(${die.rotY}deg); }
-          100% { transform: rotateX(${die.rotX + die.rotSpeedX * die.duration}deg) rotateY(${die.rotY + die.rotSpeedY * die.duration}deg); }
+        @keyframes ${rotId} {
+          from { transform: rotate(${die.startRot}deg); }
+          to   { transform: rotate(${die.startRot + die.rotSpeed * (die.duration / 10) * 360}deg); }
         }
       `}</style>
-
-      {/* Outer wrapper: handles the float translation */}
       <div style={{
         position: 'absolute',
         left: `${die.left}%`,
-        bottom: `${die.bottom}%`,
-        width: s, height: s,
-        animation: `${animName} ${die.duration}s ${die.delay}s linear infinite`,
-        opacity: 0.28 + seeded(die.id * 13, 0, 0.22),
-        filter: 'blur(0.4px)',
+        bottom: 0,
+        width:  die.size,
+        height: die.size,
+        opacity,
+        animation: `${animId} ${die.duration}s ${die.delay}s linear infinite`,
         willChange: 'transform',
+        filter: `drop-shadow(0 0 6px ${pal[2]}88)`,
       }}>
-        {/* Inner wrapper: handles the 3D rotation, offset so cube is centred */}
         <div style={{
-          position: 'relative',
-          width: s, height: s,
-          transformStyle: 'preserve-3d',
-          animation: `${rotAnimName} ${die.duration}s ${die.delay}s linear infinite`,
+          width: '100%', height: '100%',
+          animation: `${rotId} ${die.duration * 0.9}s ${die.delay}s linear infinite`,
           willChange: 'transform',
         }}>
-          {/* 6 faces of the cube */}
-          {/* Front */}
-          <div style={faceStyle(0, 0, half, 0, 0)}>
-            <span style={labelStyle}>D{die.label}</span>
-          </div>
-          {/* Back */}
-          <div style={faceStyle(0, 0, -half, 0, 180)} />
-          {/* Right */}
-          <div style={faceStyle(half, 0, 0, 0, 90)} />
-          {/* Left */}
-          <div style={faceStyle(-half, 0, 0, 0, -90)} />
-          {/* Top */}
-          <div style={faceStyle(0, -half, 0, 90, 0)}>
-            <span style={labelStyle}>✦</span>
-          </div>
-          {/* Bottom */}
-          <div style={faceStyle(0, half, 0, -90, 0)} />
+          <ShapeComp id={die.id} pal={pal} label={label} />
         </div>
       </div>
     </>
@@ -152,12 +342,10 @@ function FloatingDice() {
     <div style={{
       position: 'absolute', inset: 0,
       overflow: 'hidden',
-      perspective: '900px',
-      perspectiveOrigin: '50% 80%',
       pointerEvents: 'none',
-      zIndex: 2,          // above dark overlay (z=1) but below content (z=10)
+      zIndex: 2,
     }}>
-      {DICE_DATA.map(die => <Cube key={die.id} die={die} />)}
+      {DICE_DATA.map(die => <FloatingDie key={die.id} die={die} />)}
     </div>
   );
 }
