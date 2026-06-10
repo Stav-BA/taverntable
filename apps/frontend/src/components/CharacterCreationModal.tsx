@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useGameStore } from '@/stores/gameStore';
+import { useCharacterStore } from '@/stores/characterStore';
 import { socketEmit } from '@/lib/socket';
+import type { ClassName } from '@/lib/classes5e';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1000,6 +1002,7 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
 export default function CharacterCreationModal({ onClose, onComplete }: { onClose?: () => void; onComplete?: () => void }) {
   const player = useSessionStore((s) => s.player);
   const addToken = useGameStore((s) => s.addToken);
+  const initSheet = useCharacterStore((s) => s.initSheet);
 
   const TOTAL_STEPS = 5;
   const [step, setStep] = useState(0);
@@ -1072,6 +1075,10 @@ export default function CharacterCreationModal({ onClose, onComplete }: { onClos
 
     addToken(token);
     socketEmit.tokenAdd(token as unknown as Record<string, unknown>);
+
+    // Initialize character sheet in the store so CharacterSheetModal has data
+    initSheet(player.id, name.trim(), player.name, className as ClassName);
+
     onClose?.();
     onComplete?.();
   };

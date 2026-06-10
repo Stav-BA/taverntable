@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useGameStore } from '@/stores/gameStore';
 import { useSessionStore } from '@/stores/sessionStore';
+import { useCharacterStore } from '@/stores/characterStore';
 import { socketEmit } from '@/lib/socket';
 import { DMToolsPanel } from '@/components/DMTools';
 import { LootModal } from '@/components/Loot';
+import { CharacterSheetModal } from '@/components/CharacterSheet/CharacterSheetModal';
 
 const MACRO_PRESETS = [
   { label: 'Perception', icon: '👁', expression: '1d20', modifier: 0 },
@@ -77,6 +79,10 @@ export default function RightSidebar() {
   const [activeTab, setActiveTab] = useState<'character' | 'players' | 'dm-tools'>('character');
   const [showLootModal, setShowLootModal] = useState(false);
   const [activeLoot, setActiveLoot] = useState<ActiveLoot | null>(null);
+  const [showCharacterSheet, setShowCharacterSheet] = useState(false);
+
+  const sheets = useCharacterStore((s) => s.sheets);
+  const hasSheet = player ? !!sheets[player.id] : false;
 
   // Poll for loot every 2 seconds
   useEffect(() => {
@@ -188,6 +194,25 @@ export default function RightSidebar() {
             >
               {isDM ? 'Select a token to view stats' : 'No character token on map yet'}
             </div>
+          )}
+
+          {/* Open Character Sheet button */}
+          {!isDM && hasSheet && (
+            <button
+              onClick={() => setShowCharacterSheet(true)}
+              style={{
+                width: '100%', padding: '7px 0',
+                background: 'rgba(201,162,39,0.15)',
+                border: '1px solid rgba(201,162,39,0.45)',
+                borderRadius: 3, cursor: 'pointer',
+                color: '#c9a227', fontSize: 12, fontFamily: 'Cinzel, serif',
+                fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(201,162,39,0.25)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(201,162,39,0.15)'; }}
+            >
+              📜 Open Character Sheet
+            </button>
           )}
 
           {/* Macros */}
@@ -310,6 +335,14 @@ export default function RightSidebar() {
             setActiveLoot(null);
             setShowLootModal(false);
           }}
+        />
+      )}
+
+      {/* Character sheet modal */}
+      {showCharacterSheet && player && (
+        <CharacterSheetModal
+          playerId={player.id}
+          onClose={() => setShowCharacterSheet(false)}
         />
       )}
     </div>
